@@ -152,7 +152,12 @@
     <ResourceCompile Include="MateBook-E-Pen.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="ico\copy.ico" />
     <Image Include="ico\main.ico" />
+    <Image Include="ico\paste.ico" />
+    <Image Include="ico\screenshot.ico" />
+    <Image Include="ico\undo.ico" />
+    <Image Include="ico\W&amp;E.ico" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -42,6 +42,21 @@
     <Image Include="ico\main.ico">
       <Filter>资源文件</Filter>
     </Image>
+    <Image Include="ico\copy.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\paste.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\screenshot.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\undo.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\W&amp;E.ico">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

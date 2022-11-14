@@ -19,6 +19,7 @@ using namespace ATL;
 
 #define CLOSE 12
 #define UPDATE 13
+#define PEN_SETTING 14
 
 #define CanUpdate 1
 #define UpToDate 2

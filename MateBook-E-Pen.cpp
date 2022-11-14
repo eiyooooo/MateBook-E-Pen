@@ -1,13 +1,14 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "0.1.0"
+#define version "0.2.0"
 
 // 全局变量
 HINSTANCE hInst;                                // 当前实例
 WCHAR szTitle[MAX_LOADSTRING];                  // 标题栏文本
 WCHAR szWindowClass[MAX_LOADSTRING];            // 主窗口类名
 NOTIFYICONDATA nid;                             // 托盘图标结构体
+int state;                                      // 当前托盘图标
 HMENU hMenu;    					    		// 菜单句柄
 HRESULT hr;                                     // HRESULT
 long current_count = 0;                         // 当前子元素的数量
@@ -18,6 +19,7 @@ string update_info; 			  			    // 更新信息
 // 临时全局变量
 const char* windowname;                         // 寻找的窗口名
 HWND hwnd_temp;     						    // 窗口句柄
+int screenshot_count;                           // 截图计数
 
 // 此代码模块中包含的函数的前向声明
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -26,6 +28,7 @@ LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    ToUpdate(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    update_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 void                Tray(HWND hWnd);
+void                Tray_Icon();
 HWND                findwindow(const char* Windowname);
 HWND                findchlidwindow(HWND hwnd_in, const char* Windowname);
 IAccessible*        findchild(CComPtr<IAccessible> acc_in, PCWSTR name);
@@ -113,29 +116,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 update(hWnd, CanUpdate);
 			}
         }
+        Tray_Icon();
         break;
     case WM_SIZE:
-    {
         if (wParam == SIZE_MINIMIZED)
         {
             ShowWindow(hWnd, SW_HIDE);
         }
-    }
-    break;
+        break;
     case WM_TRAY:
-    {
-        /*if (lParam == WM_LBUTTONDBLCLK)
+        if (lParam == WM_LBUTTONDOWN)
         {
-            ShowWindow(hWnd, SW_SHOWNORMAL);
-            SetForegroundWindow(hWnd);
-        }*/
+            Tray_Icon();
+        }
         if (lParam == WM_RBUTTONDOWN)
         {
             GetCursorPos(&pt);
             SetForegroundWindow(hWnd);
             UINT clicked = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY, pt.x, pt.y, 0, hWnd, NULL);
             SendMessage(hWnd, WM_NULL, 0, 0);
-            if (clicked == CLOSE) SendMessage(hWnd, WM_CLOSE, wParam, lParam);
+            if (clicked == CLOSE)
+                SendMessage(hWnd, WM_CLOSE, wParam, lParam);
             if (clicked == UPDATE)
             {
                 if (check_update() == S_OK)
@@ -145,8 +146,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
 				else update(hWnd, CheckUpdateFailed);
             }
+            if (clicked == PEN_SETTING)
+                ShellExecute(NULL, _T("open"), _T("ms-settings:pen"), NULL, NULL, SW_SHOWNORMAL);
         }
-    }
     break;
     case WM_DESTROY:
         Shell_NotifyIcon(NIM_DELETE, &nid);
@@ -185,11 +187,80 @@ void Tray(HWND hWnd)
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAY;
     nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_MAIN));
+    state = IDI_MAIN;
     wcscpy_s(nid.szTip, _T("MateBook E Pen"));
     Shell_NotifyIcon(NIM_ADD, &nid);
     hMenu = CreatePopupMenu();
+    AppendMenu(hMenu, MF_STRING, PEN_SETTING, _T("打开Windows笔设置"));
     AppendMenu(hMenu, MF_STRING, UPDATE, _T("检查更新"));
 	AppendMenu(hMenu, MF_STRING, CLOSE, _T("退出"));
+}
+
+void Tray_Icon()
+{
+    switch (state)
+    {
+	case IDI_MAIN:
+    {
+        DestroyIcon(nid.hIcon);
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_WnE));
+        state = IDI_WnE;
+        Shell_NotifyIcon(NIM_MODIFY, &nid);
+        break;
+    }
+	case IDI_WnE:
+    {
+        DestroyIcon(nid.hIcon);
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_SCREENSHOT));
+        state = IDI_SCREENSHOT;
+        Shell_NotifyIcon(NIM_MODIFY, &nid);
+        screenshot_count = 0;
+        break;
+    }
+	case IDI_SCREENSHOT:
+    {
+        DestroyIcon(nid.hIcon);
+        if (screenshot_count == 0)
+        {
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_COPY));
+            state = IDI_COPY;
+            Shell_NotifyIcon(NIM_MODIFY, &nid);
+        }
+		else
+		{
+			nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_PASTE));
+			state = IDI_PASTE;
+			Shell_NotifyIcon(NIM_MODIFY, &nid);
+			screenshot_count = 0;
+		}
+        break;
+    }
+	case IDI_COPY:
+    {
+        DestroyIcon(nid.hIcon);
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_PASTE));
+        state = IDI_PASTE;
+        Shell_NotifyIcon(NIM_MODIFY, &nid);
+        break;
+    }
+	case IDI_PASTE:
+    {
+        DestroyIcon(nid.hIcon);
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_UNDO));
+        state = IDI_UNDO;
+        Shell_NotifyIcon(NIM_MODIFY, &nid);
+        break;
+    }
+	case IDI_UNDO:
+    {
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_WnE));
+        state = IDI_WnE;
+        Shell_NotifyIcon(NIM_MODIFY, &nid);
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
@@ -221,19 +292,80 @@ void* main_thread(void* arg)
     while (1)
     {
         Sleep(1);
-		HWND hwnd_current = GetForegroundWindow();
-		GetWindowTextA(hwnd_current, title, sizeof(title));
-        if (BUTTON == true)
+        switch (state)
         {
-            if (StrStrA(title, "OneNote for Windows 10") != NULL)
+		case IDI_WnE:
+        {
+            HWND hwnd_current = GetForegroundWindow();
+            GetWindowTextA(hwnd_current, title, sizeof(title));
+            if (BUTTON == true)
             {
-                onenote();
+                if (StrStrA(title, "OneNote for Windows 10") != NULL)
+                {
+                    onenote();
+                }
+                if (StrStrA(title, "Drawboard PDF") != NULL)
+                {
+                    writing = drawboard(writing);
+                }
+                BUTTON = false;
             }
-            if (StrStrA(title, "Drawboard PDF") != NULL)
+            break;
+        }
+		case IDI_SCREENSHOT:
+        {
+            if (BUTTON == true)
             {
-                writing = drawboard(writing);
+                keybd_event(VK_LWIN, 0, 0, 0);
+                keybd_event(VK_SHIFT, 0, 0, 0);
+                keybd_event(0x53, 0, 0, 0);
+                keybd_event(0x53, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
+                BUTTON = false;
+                screenshot_count++;
+                Tray_Icon();
             }
-			BUTTON = false;
+            break;
+        }
+		case IDI_COPY:
+        {
+            if (BUTTON == true)
+            {
+                keybd_event(VK_CONTROL, 0, 0, 0);
+                keybd_event(0x43, 0, 0, 0);
+                keybd_event(0x43, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+                BUTTON = false;
+            }
+            break;
+        }
+		case IDI_PASTE:
+        {
+            if (BUTTON == true)
+            {
+                keybd_event(VK_CONTROL, 0, 0, 0);
+                keybd_event(0x56, 0, 0, 0);
+                keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+                BUTTON = false;
+            }
+            break;
+        }
+		case IDI_UNDO:
+        {
+            if (BUTTON == true)
+            {
+                keybd_event(VK_CONTROL, 0, 0, 0);
+                keybd_event(0x5A, 0, 0, 0);
+                keybd_event(0x5A, 0, KEYEVENTF_KEYUP, 0);
+                keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+                BUTTON = false;
+            }
+            break;
+        }
+        default:
+            break;
         }
     }
 	
@@ -607,7 +739,7 @@ INT_PTR CALLBACK ToUpdate(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         }
         if (LOWORD(wParam) == IDOK)
         {
-            ShellExecute(NULL, _T("open"), _T("explorer.exe"), _T("https://github.com/eiyooooo/MateBook-E-Pen/releases"), NULL, SW_SHOW);
+            ShellExecute(NULL, _T("open"), _T("explorer.exe"), _T("https://github.com/eiyooooo/MateBook-E-Pen/releases/latest"), NULL, SW_SHOW);
             EndDialog(hDlg, LOWORD(wParam));
             return (INT_PTR)TRUE;
         }

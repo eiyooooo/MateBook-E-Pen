@@ -9,8 +9,12 @@
 #define IDI_MAIN                        136
 #define IDD_UPDATE                      142
 #define IDD_UPTODATE                    143
-#define IDD_UPTODATEFAIL                144
 #define IDD_UPDATEFAILED                144
+#define IDI_COPY                        145
+#define IDI_PASTE                       146
+#define IDI_SCREENSHOT                  147
+#define IDI_UNDO                        148
+#define IDI_WnE                         149
 #define IDC_S1                          1004
 #define IDC_S2                          1005
 #define IDC_S3                          1006
@@ -23,7 +27,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        145
+#define _APS_NEXT_RESOURCE_VALUE        150
 #define _APS_NEXT_COMMAND_VALUE         32773
 #define _APS_NEXT_CONTROL_VALUE         1009
 #define _APS_NEXT_SYMED_VALUE           111
