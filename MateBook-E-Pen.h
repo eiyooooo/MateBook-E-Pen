@@ -6,6 +6,7 @@
 #include "atlbase.h"
 #include "comutil.h"
 #include "shellapi.h"
+#include "string"
 
 using namespace std;
 using namespace ATL;

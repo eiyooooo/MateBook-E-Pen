@@ -1,32 +1,39 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "0.2.0"
+#define version "0.2.1"
 
 // 全局变量
 HINSTANCE hInst;                                // 当前实例
 WCHAR szTitle[MAX_LOADSTRING];                  // 标题栏文本
 WCHAR szWindowClass[MAX_LOADSTRING];            // 主窗口类名
+HWND inst_hwnd;                                 // 主窗口句柄
+HWND hwnd_popup;                                // 弹出窗口句柄
 NOTIFYICONDATA nid;                             // 托盘图标结构体
 int state;                                      // 当前托盘图标
 HMENU hMenu;    					    		// 菜单句柄
 HRESULT hr;                                     // HRESULT
 long current_count = 0;                         // 当前子元素的数量
-bool BUTTON = false;                            // 笔侧键是否按下
+BOOL BUTTON = FALSE;                            // 笔侧键是否按下
 string update_version;  					    // 更新版本号
 string update_info; 			  			    // 更新信息
 
-// 临时全局变量
 const char* windowname;                         // 寻找的窗口名
 HWND hwnd_temp;     						    // 窗口句柄
-int screenshot_count;                           // 截图计数
+int if_used;                                    // 使用情况计数
+BOOL switch_back;                               // 是否切换回原窗口
+BOOL go_update;                                 // 是否更新
+
+// 图标
+int idi_MAIN, idi_WnE, idi_SCREENSHOT, idi_COPY, idi_PASTE, idi_UNDO;
 
 // 此代码模块中包含的函数的前向声明
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE hInstance, int nCmdShow);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    ToUpdate(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    update_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK    show_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK    popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 void                Tray(HWND hWnd);
 void                Tray_Icon();
 HWND                findwindow(const char* Windowname);
@@ -35,9 +42,12 @@ IAccessible*        findchild(CComPtr<IAccessible> acc_in, PCWSTR name);
 IAccessible*        findchild_which(CComPtr<IAccessible> acc_in, int which);
 wstring             getname(CComPtr<IAccessible> acc, CComVariant varChild);
 wstring             getrole(CComPtr<IAccessible> acc, CComVariant varChild);
+string              GetRegValue(int nKeyType, const string& strUrl, const string& strKey);
 string              midstr(string str, PCSTR start, PCSTR end);
 string              wstring2string(const wstring& ws);
 wstring             string2wstring(const string& s);
+BOOL                get_if_dark();
+void                switch_dark(BOOL if_dark);
 HRESULT             check_update();
 HRESULT             update(HWND hWnd, int state);
 HRESULT             onenote();
@@ -45,6 +55,8 @@ bool                drawboard(bool writing);
 void*               main_thread(void* arg);
 void*               F19_1(void* arg);
 void*               F19_2(void* arg);
+void*               auto_switch_back(void* arg);
+void*               light_or_dark(void* arg);
 
 ///////////////////////////////////////////////
 /////////////////             /////////////////
@@ -57,7 +69,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     setlocale(LC_ALL, "chs");
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
+	switch_dark(get_if_dark());
+	
     pthread_t  tid1;
     int ret;
     ret = pthread_create(&tid1, NULL, main_thread, NULL);
@@ -76,15 +91,34 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     if (ret3 != 0) return -1;
     ret3 = pthread_detach(tid3);
 	
+    pthread_t  tid4;
+    int ret4;
+    ret4 = pthread_create(&tid4, NULL, auto_switch_back, NULL);
+    if (ret4 != 0) return -1;
+    ret4 = pthread_detach(tid4);
+
+    pthread_t  tid5;
+    int ret5;
+    ret5 = pthread_create(&tid5, NULL, light_or_dark, NULL);
+    if (ret5 != 0) return -1;
+    ret5 = pthread_detach(tid5);
 	
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_MATEBOOKEPEN, szWindowClass, MAX_LOADSTRING);
+
+    HWND handle = FindWindow(NULL, szTitle);
+    if (handle != NULL)
+    {
+        DialogBox(hInst, MAKEINTRESOURCE(IDD_OPENED), NULL, show_error);
+        return 0;
+    }
+	
     MyRegisterClass(hInstance);
 
     if (!InitInstance (hInstance, nCmdShow)) return FALSE;
 
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_MATEBOOKEPEN));
-
+	
     MSG msg;
 
     while (GetMessage(&msg, nullptr, 0, 0))
@@ -108,6 +142,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_CREATE:
+		inst_hwnd = hWnd,hwnd_popup = hWnd;
         Tray(hWnd);
         if (check_update() == S_OK)
         {
@@ -128,6 +163,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (lParam == WM_LBUTTONDOWN)
         {
             Tray_Icon();
+            if (hwnd_popup == inst_hwnd)
+            {
+                DialogBox(hInst, MAKEINTRESOURCE(IDD_POPUP), hWnd, popup);
+            }
+            else
+            {
+                SendMessage(hwnd_popup, WM_DESTROY, 0, 0);
+                DialogBox(hInst, MAKEINTRESOURCE(IDD_POPUP), hWnd, popup);
+            }
         }
         if (lParam == WM_RBUTTONDOWN)
         {
@@ -161,6 +205,94 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
+INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(lParam);
+	hwnd_popup = hDlg;
+    static HBRUSH Brush;
+    switch (message)
+    {
+    case WM_INITDIALOG:
+        Brush = CreateSolidBrush(RGB(255, 255, 255));
+        return (INT_PTR)TRUE;
+
+    case WM_CTLCOLORDLG:
+        return (INT_PTR)Brush;
+    case WM_CTLCOLORSTATIC:
+        return (INT_PTR)Brush;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDC_WnE)
+        {
+            state = IDI_UNDO;
+            Tray_Icon();
+            SetDlgItemText(hDlg, IDC_MODE, L"笔/橡皮模式");
+            SetTimer(hDlg, 1, 3000, NULL);
+            return (INT_PTR)TRUE;
+        }
+        if (LOWORD(wParam) == IDC_SCREENSHOT)
+        {
+            state = IDI_WnE;
+            Tray_Icon();
+			SetDlgItemText(hDlg, IDC_MODE, L"截图模式");
+            SetTimer(hDlg, 1, 3000, NULL);
+            return (INT_PTR)TRUE;
+        }
+        if (LOWORD(wParam) == IDC_COPY)
+        {
+            state = IDI_SCREENSHOT;
+            Tray_Icon();
+			SetDlgItemText(hDlg, IDC_MODE, L"复制模式");
+            SetTimer(hDlg, 1, 3000, NULL);
+            return (INT_PTR)TRUE;
+        }
+        if (LOWORD(wParam) == IDC_PASTE)
+        {
+            state = IDI_COPY;
+            Tray_Icon();
+			SetDlgItemText(hDlg, IDC_MODE, L"粘贴模式");
+            SetTimer(hDlg, 1, 3000, NULL);
+            return (INT_PTR)TRUE;
+        }
+        if (LOWORD(wParam) == IDC_UNDO)
+        {
+            state = IDI_PASTE;
+            Tray_Icon();
+			SetDlgItemText(hDlg, IDC_MODE, L"撤销模式");
+            SetTimer(hDlg, 1, 3000, NULL);
+            return (INT_PTR)TRUE;
+        }
+        break;
+    case WM_SHOWWINDOW:
+		SetTimer(hDlg, 1, 3000, NULL);
+        switch (state)
+        {
+        case IDI_WnE:
+            SetDlgItemText(hDlg, IDC_MODE, L"笔/橡皮模式");
+            break;
+        case IDI_SCREENSHOT:
+            SetDlgItemText(hDlg, IDC_MODE, L"截图模式");
+            break;
+        case IDI_COPY:
+            SetDlgItemText(hDlg, IDC_MODE, L"复制模式");
+            break;
+        case IDI_PASTE:
+            SetDlgItemText(hDlg, IDC_MODE, L"粘贴模式");
+            break;
+        case IDI_UNDO:
+            SetDlgItemText(hDlg, IDC_MODE, L"撤销模式");
+            break;
+        }
+		break;
+    case WM_TIMER:
+        DeleteObject(Brush);
+		EndDialog(hDlg, LOWORD(wParam));
+		hwnd_popup = inst_hwnd;
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
+
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
     WNDCLASSEXW wcex;
@@ -170,13 +302,28 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
     wcex.hInstance = hInstance;
-    wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_MAIN));
+    wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(idi_MAIN));
     wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wcex.lpszMenuName = NULL;
     wcex.lpszClassName = szWindowClass;
-    wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_MAIN));
+    wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(idi_MAIN));
     return RegisterClassExW(&wcex);
+}
+
+BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
+{
+    hInst = hInstance;
+
+    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+
+    if (!hWnd) return FALSE;
+
+    ShowWindow(hWnd, SW_HIDE);
+    UpdateWindow(hWnd);
+
+    return TRUE;
 }
 
 void Tray(HWND hWnd)
@@ -186,7 +333,7 @@ void Tray(HWND hWnd)
     nid.uID = IDR_MAINFRAME;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAY;
-    nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_MAIN));
+    nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_MAIN));
     state = IDI_MAIN;
     wcscpy_s(nid.szTip, _T("MateBook E Pen"));
     Shell_NotifyIcon(NIM_ADD, &nid);
@@ -203,79 +350,82 @@ void Tray_Icon()
 	case IDI_MAIN:
     {
         DestroyIcon(nid.hIcon);
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_WnE));
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
         state = IDI_WnE;
         Shell_NotifyIcon(NIM_MODIFY, &nid);
+        if_used = 0;
         break;
     }
 	case IDI_WnE:
     {
         DestroyIcon(nid.hIcon);
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_SCREENSHOT));
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_SCREENSHOT));
         state = IDI_SCREENSHOT;
         Shell_NotifyIcon(NIM_MODIFY, &nid);
-        screenshot_count = 0;
+        if_used = 0;
+        switch_back = TRUE;
         break;
     }
 	case IDI_SCREENSHOT:
     {
         DestroyIcon(nid.hIcon);
-        if (screenshot_count == 0)
+        if (if_used == 0)
         {
-            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_COPY));
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
             state = IDI_COPY;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
         }
 		else
 		{
-			nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_PASTE));
+			nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
 			state = IDI_PASTE;
 			Shell_NotifyIcon(NIM_MODIFY, &nid);
-			screenshot_count = 0;
 		}
+        if_used = 0;
+        switch_back = TRUE;
         break;
     }
 	case IDI_COPY:
     {
         DestroyIcon(nid.hIcon);
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_PASTE));
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
         state = IDI_PASTE;
         Shell_NotifyIcon(NIM_MODIFY, &nid);
+        if_used = 0;
+        switch_back = TRUE;
         break;
     }
 	case IDI_PASTE:
     {
         DestroyIcon(nid.hIcon);
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_UNDO));
-        state = IDI_UNDO;
-        Shell_NotifyIcon(NIM_MODIFY, &nid);
+        if (if_used == 0)
+        {
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_UNDO));
+            state = IDI_UNDO;
+            Shell_NotifyIcon(NIM_MODIFY, &nid);
+        }
+        else
+        {
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
+            state = IDI_WnE;
+            Shell_NotifyIcon(NIM_MODIFY, &nid);
+        }
+        if_used = 0;
+        switch_back = TRUE;
         break;
     }
 	case IDI_UNDO:
     {
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(IDI_WnE));
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
         state = IDI_WnE;
         Shell_NotifyIcon(NIM_MODIFY, &nid);
+        if_used = 0;
+        switch_back = TRUE;
         break;
     }
     default:
         break;
     }
-}
-
-BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
-{
-   hInst = hInstance;
-
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
-
-   if (!hWnd) return FALSE;
-
-   ShowWindow(hWnd, SW_HIDE);
-   UpdateWindow(hWnd);
-
-   return TRUE;
 }
 
 ///////////////////////////////////////////////
@@ -296,10 +446,11 @@ void* main_thread(void* arg)
         {
 		case IDI_WnE:
         {
-            HWND hwnd_current = GetForegroundWindow();
-            GetWindowTextA(hwnd_current, title, sizeof(title));
-            if (BUTTON == true)
+            if (BUTTON)
             {
+                HWND hwnd_current = GetForegroundWindow();
+                GetWindowTextA(hwnd_current, title, sizeof(title));
+				
                 if (StrStrA(title, "OneNote for Windows 10") != NULL)
                 {
                     onenote();
@@ -308,13 +459,14 @@ void* main_thread(void* arg)
                 {
                     writing = drawboard(writing);
                 }
-                BUTTON = false;
+                BUTTON = FALSE;
+                if_used++;
             }
             break;
         }
 		case IDI_SCREENSHOT:
         {
-            if (BUTTON == true)
+            if (BUTTON)
             {
                 keybd_event(VK_LWIN, 0, 0, 0);
                 keybd_event(VK_SHIFT, 0, 0, 0);
@@ -322,45 +474,50 @@ void* main_thread(void* arg)
                 keybd_event(0x53, 0, KEYEVENTF_KEYUP, 0);
                 keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, 0);
                 keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
-                BUTTON = false;
-                screenshot_count++;
+                BUTTON = FALSE;
+                if_used++;
                 Tray_Icon();
             }
             break;
         }
 		case IDI_COPY:
         {
-            if (BUTTON == true)
+            if (BUTTON)
             {
                 keybd_event(VK_CONTROL, 0, 0, 0);
                 keybd_event(0x43, 0, 0, 0);
                 keybd_event(0x43, 0, KEYEVENTF_KEYUP, 0);
                 keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                BUTTON = false;
+                BUTTON = FALSE;
+                if_used++;
+                Tray_Icon();
             }
             break;
         }
 		case IDI_PASTE:
         {
-            if (BUTTON == true)
+            if (BUTTON)
             {
                 keybd_event(VK_CONTROL, 0, 0, 0);
                 keybd_event(0x56, 0, 0, 0);
                 keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0);
                 keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                BUTTON = false;
+                BUTTON = FALSE;
+                if_used++;
+                Tray_Icon();
             }
             break;
         }
 		case IDI_UNDO:
         {
-            if (BUTTON == true)
+            if (BUTTON)
             {
                 keybd_event(VK_CONTROL, 0, 0, 0);
                 keybd_event(0x5A, 0, 0, 0);
                 keybd_event(0x5A, 0, KEYEVENTF_KEYUP, 0);
                 keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                BUTTON = false;
+                BUTTON = FALSE;
+                if_used++;
             }
             break;
         }
@@ -380,7 +537,7 @@ void* F19_1(void* arg)
         Sleep(1);
         if (GetAsyncKeyState(VK_F19))
         {
-            BUTTON = true;
+            BUTTON = TRUE;
         }
     }
 }
@@ -392,7 +549,39 @@ void* F19_2(void* arg)
         Sleep(1);
         if (GetAsyncKeyState(VK_F19))
         {
-            BUTTON = true;
+            BUTTON = TRUE;
+        }
+    }
+}
+
+void* auto_switch_back(void* arg)
+{
+    HWND hwnd_current = nullptr, a = nullptr, b = nullptr;
+    while (1)
+    {
+        Sleep(1);
+        a = FindWindow(L"Shell_TrayWnd", NULL);
+        b = FindWindow(NULL, L"屏幕截图");
+        if (GetForegroundWindow() == a || GetForegroundWindow() == b || GetForegroundWindow() == hwnd_popup)
+		{
+            if (switch_back)
+            {
+                Sleep(100);
+                SetForegroundWindow(hwnd_current);
+                SetFocus(hwnd_current);
+                switch_back = FALSE;
+            }
+		}
+        else
+        {
+            hwnd_current = GetForegroundWindow();
+            if (switch_back)
+            {
+                Sleep(100);
+                SetForegroundWindow(hwnd_current);
+                SetFocus(hwnd_current);
+                switch_back = FALSE;
+            }
         }
     }
 }
@@ -459,6 +648,83 @@ bool drawboard(bool writing)
         Sleep(1);
         keybd_event(0x32, 0, 0, 0);
         return true;
+    }
+}
+
+////////////////////////////////////////////////
+/////////////////              /////////////////
+/////////////////  深/浅色切换  /////////////////
+/////////////////              /////////////////
+////////////////////////////////////////////////
+
+void* light_or_dark(void* arg)
+{
+    Sleep(3000);
+    BOOL if_dark = get_if_dark();
+    while (1)
+    {
+        Sleep(400);
+        if (get_if_dark() != if_dark)
+        {
+            if_dark = get_if_dark();
+            switch_dark(if_dark);
+            switch (state)
+            {
+            case IDI_WnE:
+                state = IDI_UNDO;
+                break;
+            case IDI_SCREENSHOT:
+                state = IDI_WnE;
+                break;
+            case IDI_COPY:
+                state = IDI_SCREENSHOT;
+                break;
+            case IDI_PASTE:
+                state = IDI_COPY;
+                break;
+            case IDI_UNDO:
+                state = IDI_PASTE;
+                break;
+            }
+            Tray_Icon();
+        }
+    }
+}
+
+BOOL get_if_dark()
+{
+    string dark = GetRegValue(1, "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize", "SystemUsesLightTheme");
+    if (dark == "0")
+    {
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+void switch_dark(BOOL if_dark)
+{
+    if (if_dark)
+    {
+        idi_MAIN = IDI_MAIN_DARK;
+        idi_WnE = IDI_WnE_DARK;
+        idi_SCREENSHOT = IDI_SCREENSHOT_DARK;
+        idi_COPY = IDI_COPY_DARK;
+        idi_PASTE = IDI_PASTE_DARK;
+        idi_UNDO = IDI_UNDO_DARK;
+        Sleep(1);
+    }
+    else
+    {
+        idi_MAIN = IDI_MAIN;
+        idi_WnE = IDI_WnE;
+        idi_SCREENSHOT = IDI_SCREENSHOT;
+        idi_COPY = IDI_COPY;
+        idi_PASTE = IDI_PASTE;
+        idi_UNDO = IDI_UNDO;
+        Sleep(1);
     }
 }
 
@@ -559,6 +825,7 @@ BOOL CALLBACK enum_callback(HWND hwnd, LPARAM lParam)
 
 HWND findwindow(const char* Windowname)
 {
+    hwnd_temp = NULL;
     windowname = Windowname;
     EnumWindows(enum_callback, 0);
     HWND Hwnd_temp = hwnd_temp;
@@ -569,6 +836,7 @@ HWND findwindow(const char* Windowname)
 
 HWND findchlidwindow(HWND hwnd_in, const char* Windowname)
 {
+    hwnd_temp = NULL;
     windowname = Windowname;
     EnumChildWindows(hwnd_in, enum_callback, 0);
     HWND Hwnd_temp = hwnd_temp;
@@ -707,17 +975,22 @@ HRESULT update(HWND hWnd, int state)
 {
     if (state == CanUpdate)
     {
+        go_update = FALSE;
         DialogBox(hInst, MAKEINTRESOURCE(IDD_UPDATE), hWnd, ToUpdate);
+        if (go_update == TRUE)
+        {
+            SendMessage(hWnd, WM_CLOSE, 0, 0);
+        }
         return S_OK;
     }
     if (state == UpToDate)
     {
-        DialogBox(hInst, MAKEINTRESOURCE(IDD_UPTODATE), hWnd, update_error);
+        DialogBox(hInst, MAKEINTRESOURCE(IDD_UPTODATE), hWnd, show_error);
         return S_OK;
     }
     if (state == CheckUpdateFailed)
     {
-        DialogBox(hInst, MAKEINTRESOURCE(IDD_UPDATEFAILED), hWnd, update_error);
+        DialogBox(hInst, MAKEINTRESOURCE(IDD_UPDATEFAILED), hWnd, show_error);
         return S_OK;
     }
 	return S_FALSE;
@@ -726,21 +999,31 @@ HRESULT update(HWND hWnd, int state)
 INT_PTR CALLBACK ToUpdate(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
     UNREFERENCED_PARAMETER(lParam);
+    static HBRUSH Brush;
     switch (message)
     {
     case WM_INITDIALOG:
+        Brush = CreateSolidBrush(RGB(255, 255, 255));
         return (INT_PTR)TRUE;
-
+		
+	case WM_CTLCOLORDLG:
+		return (INT_PTR)Brush;
+    case WM_CTLCOLORSTATIC:
+		return (INT_PTR)Brush;
+		
     case WM_COMMAND:
         if (LOWORD(wParam) == IDCANCEL)
         {
             EndDialog(hDlg, LOWORD(wParam));
+            DeleteObject(Brush);
             return (INT_PTR)TRUE;
         }
         if (LOWORD(wParam) == IDOK)
         {
             ShellExecute(NULL, _T("open"), _T("explorer.exe"), _T("https://github.com/eiyooooo/MateBook-E-Pen/releases/latest"), NULL, SW_SHOW);
             EndDialog(hDlg, LOWORD(wParam));
+            DeleteObject(Brush);
+            go_update = TRUE;
             return (INT_PTR)TRUE;
         }
         break;
@@ -748,26 +1031,156 @@ INT_PTR CALLBACK ToUpdate(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 		SetDlgItemTextA(hDlg, IDC_VERSIONSHOW, update_version.c_str());
 		SetDlgItemTextA(hDlg, IDC_INFOSHOW, update_info.c_str());
 		break;
+    case WM_DESTROY:
+		DeleteObject(Brush);
+		break;
     }
     return (INT_PTR)FALSE;
 }
 
-INT_PTR CALLBACK update_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK show_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
     UNREFERENCED_PARAMETER(lParam);
+    static HBRUSH Brush;
     switch (message)
     {
     case WM_INITDIALOG:
+        Brush = CreateSolidBrush(RGB(255, 255, 255));
         return (INT_PTR)TRUE;
+		
+    case WM_CTLCOLORDLG:
+        return (INT_PTR)Brush;
+    case WM_CTLCOLORSTATIC:
+        return (INT_PTR)Brush;
+		
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK)
         {
             EndDialog(hDlg, LOWORD(wParam));
+            DeleteObject(Brush);
             return (INT_PTR)TRUE;
         }
         break;
+	case WM_DESTROY:
+		DeleteObject(Brush);
+		break;
     }
     return (INT_PTR)FALSE;
+}
+
+///////////////////////////////////////////////
+/////////////////             /////////////////
+/////////////////  读取注册表  /////////////////
+/////////////////             /////////////////
+///////////////////////////////////////////////
+
+string GetRegValue(int nKeyType, const string& strUrl, const string& strKey)
+{
+    string strValue("");
+    HKEY hKey = NULL;
+    HKEY  hKeyResult = NULL;
+    DWORD dwSize = 0;
+    DWORD dwDataType = 0;
+    wstring wstrUrl = string2wstring(strUrl);
+    wstring wstrKey = string2wstring(strKey);
+
+    switch (nKeyType)
+    {
+    case 0:
+    {
+        hKey = HKEY_CLASSES_ROOT;
+        break;
+    }
+    case 1:
+    {
+        hKey = HKEY_CURRENT_USER;
+        break;
+    }
+    case 2:
+    {
+        hKey = HKEY_LOCAL_MACHINE;
+        break;
+    }
+    case 3:
+    {
+        hKey = HKEY_USERS;
+        break;
+    }
+    case 4:
+    {
+        hKey = HKEY_PERFORMANCE_DATA;
+        break;
+    }
+    case 5:
+    {
+        hKey = HKEY_CURRENT_CONFIG;
+        break;
+    }
+    case 6:
+    {
+        hKey = HKEY_DYN_DATA;
+        break;
+    }
+    case 7:
+    {
+        hKey = HKEY_CURRENT_USER_LOCAL_SETTINGS;
+        break;
+    }
+    case 8:
+    {
+        hKey = HKEY_PERFORMANCE_TEXT;
+        break;
+    }
+    case 9:
+    {
+        hKey = HKEY_PERFORMANCE_NLSTEXT;
+        break;
+    }
+    default:
+    {
+        return strValue;
+    }
+    }
+
+    if (ERROR_SUCCESS == RegOpenKeyEx(hKey, wstrUrl.c_str(), 0, KEY_QUERY_VALUE, &hKeyResult))
+    {
+        RegQueryValueEx(hKeyResult, wstrKey.c_str(), 0, &dwDataType, NULL, &dwSize);
+        switch (dwDataType)
+        {
+        case REG_MULTI_SZ:
+        {
+            BYTE* lpValue = new BYTE[dwSize];
+            LONG lRet = RegQueryValueEx(hKeyResult, wstrKey.c_str(), 0, &dwDataType, lpValue, &dwSize);
+            delete[] lpValue;
+            break;
+        }
+        case REG_SZ:
+        {
+            wchar_t* lpValue = new wchar_t[dwSize];
+            memset(lpValue, 0, dwSize * sizeof(wchar_t));
+            if (ERROR_SUCCESS == RegQueryValueEx(hKeyResult, wstrKey.c_str(), 0, &dwDataType, (LPBYTE)lpValue, &dwSize))
+            {
+                wstring wstrValue(lpValue);
+                strValue = wstring2string(wstrValue);
+            }
+            delete[] lpValue;
+            break;
+        }
+		case REG_DWORD:
+		{
+			DWORD dwValue = 0;
+			if (ERROR_SUCCESS == RegQueryValueEx(hKeyResult, wstrKey.c_str(), 0, &dwDataType, (LPBYTE)&dwValue, &dwSize))
+			{
+				strValue = to_string(dwValue);
+			}
+			break;
+		}
+        default:
+            break;
+        }
+    }
+    RegCloseKey(hKeyResult);
+    return strValue;
 }
 
 ///////////////////////////////////////////////
@@ -794,16 +1207,24 @@ string midstr(string str, PCSTR start, PCSTR end)
 
 string wstring2string(const wstring& ws)
 {
-    _bstr_t t = ws.c_str();
-    char* pchar = (char*)t;
-    string result = pchar;
+    const wchar_t* _Source = ws.c_str();
+    size_t _Dsize = wcstombs(NULL, _Source, 0) + 1;
+    char* _Dest = new char[_Dsize];
+    memset(_Dest, 0, _Dsize);
+    wcstombs(_Dest, _Source, _Dsize);
+    string result = _Dest;
+    delete[]_Dest;
     return result;
 }
 
 wstring string2wstring(const string& s)
 {
-    _bstr_t t = s.c_str();
-    wchar_t* pwchar = (wchar_t*)t;
-    wstring result = pwchar;
+    const char* _Source = s.c_str();
+    size_t _Dsize = mbstowcs(NULL, _Source, 0) + 1;
+    wchar_t* _Dest = new wchar_t[_Dsize];
+    wmemset(_Dest, 0, _Dsize);
+    mbstowcs(_Dest, _Source, _Dsize);
+    wstring result = _Dest;
+    delete[]_Dest;
     return result;
 }
