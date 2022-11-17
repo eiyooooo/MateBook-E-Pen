@@ -1,7 +1,7 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "0.2.1"
+#define version "0.2.2"
 
 // 全局变量
 HINSTANCE hInst;                                // 当前实例
@@ -43,6 +43,7 @@ IAccessible*        findchild_which(CComPtr<IAccessible> acc_in, int which);
 wstring             getname(CComPtr<IAccessible> acc, CComVariant varChild);
 wstring             getrole(CComPtr<IAccessible> acc, CComVariant varChild);
 string              GetRegValue(int nKeyType, const string& strUrl, const string& strKey);
+BOOL                SetRegValue_REG_DWORD(int nKeyType, const string& strUrl, const string& strKey, const DWORD& dwValue);
 string              midstr(string str, PCSTR start, PCSTR end);
 string              wstring2string(const wstring& ws);
 wstring             string2wstring(const string& s);
@@ -50,7 +51,7 @@ BOOL                get_if_dark();
 void                switch_dark(BOOL if_dark);
 HRESULT             check_update();
 HRESULT             update(HWND hWnd, int state);
-HRESULT             onenote();
+HRESULT             onenote(HWND hwnd_onenote);
 bool                drawboard(bool writing);
 void*               main_thread(void* arg);
 void*               F19_1(void* arg);
@@ -142,6 +143,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_CREATE:
+		SetRegValue_REG_DWORD(1, "Software\\Microsoft\\Windows\\CurrentVersion\\ClickNote\\UserCustomization\\DoubleClickBelowLock", "Override", (DWORD)1);
+		
 		inst_hwnd = hWnd,hwnd_popup = hWnd;
         Tray(hWnd);
         if (check_update() == S_OK)
@@ -163,6 +166,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (lParam == WM_LBUTTONDOWN)
         {
             Tray_Icon();
+        }
+        if (lParam == WM_LBUTTONDBLCLK)
+        {
             if (hwnd_popup == inst_hwnd)
             {
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_POPUP), hWnd, popup);
@@ -190,8 +196,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
 				else update(hWnd, CheckUpdateFailed);
             }
-            if (clicked == PEN_SETTING)
-                ShellExecute(NULL, _T("open"), _T("ms-settings:pen"), NULL, NULL, SW_SHOWNORMAL);
         }
     break;
     case WM_DESTROY:
@@ -338,7 +342,6 @@ void Tray(HWND hWnd)
     wcscpy_s(nid.szTip, _T("MateBook E Pen"));
     Shell_NotifyIcon(NIM_ADD, &nid);
     hMenu = CreatePopupMenu();
-    AppendMenu(hMenu, MF_STRING, PEN_SETTING, _T("打开Windows笔设置"));
     AppendMenu(hMenu, MF_STRING, UPDATE, _T("检查更新"));
 	AppendMenu(hMenu, MF_STRING, CLOSE, _T("退出"));
 }
@@ -446,14 +449,13 @@ void* main_thread(void* arg)
         {
 		case IDI_WnE:
         {
+            HWND hwnd_current = GetForegroundWindow();
+            GetWindowTextA(hwnd_current, title, sizeof(title));
             if (BUTTON)
             {
-                HWND hwnd_current = GetForegroundWindow();
-                GetWindowTextA(hwnd_current, title, sizeof(title));
-				
                 if (StrStrA(title, "OneNote for Windows 10") != NULL)
                 {
-                    onenote();
+                    onenote(hwnd_current);
                 }
                 if (StrStrA(title, "Drawboard PDF") != NULL)
                 {
@@ -586,7 +588,7 @@ void* auto_switch_back(void* arg)
     }
 }
 
-HRESULT onenote()
+HRESULT onenote(HWND hwnd_onenote)
 {
     hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	
@@ -595,36 +597,46 @@ HRESULT onenote()
     IAccessible* acc2 = nullptr;
     IAccessible* acc_eraser = nullptr;
     IAccessible* acc_pen = nullptr;
-    HWND hwnd_onenote = nullptr;
     HWND hwnd_child = nullptr;
 	
-    hwnd_onenote = findwindow("OneNote for Windows 10");
-    hwnd_child = findchlidwindow(hwnd_onenote, "OneNote for Windows 10");
+	hwnd_child = FindWindowEx(hwnd_onenote, NULL, L"Windows.UI.Core.CoreWindow", NULL);
     hr = AccessibleObjectFromWindow(hwnd_child, OBJID_WINDOW, IID_IAccessible, (void**)&acc0);
     acc1 = findchild(acc0, L"OneNote for Windows 10");
     acc2 = findchild(acc1, L"NAMELESS");
     acc0 = findchild(acc2, L"NAMELESS");
-    acc1 = findchild(acc0, L"功能区");
-    acc2 = findchild(acc1, L"绘图");
-    acc0 = findchild(acc2, L"下层功能区");
-    // 自动打开绘图功能区
     if (acc0 == acc2)
     {
-        acc2->accDoDefaultAction(CComVariant(0));
-        Sleep(50);
-        acc0 = findchild(acc2, L"下层功能区");
+        acc1 = findchild(acc0, L"OneNote for Windows 10");
+        acc2 = findchild(acc1, L"NAMELESS");
+        acc0 = findchild_which(acc2, -1);
+        acc1 = findchild_which(acc0, 4);
     }
-    acc1 = findchild(acc0, L"笔");
-    // 定位橡皮擦
+    else
+    {
+        acc1 = findchild(acc0, L"功能区");
+        acc2 = findchild(acc1, L"绘图");
+        acc0 = findchild(acc2, L"下层功能区");
+        if (acc2 == nullptr) return E_FAIL;
+        //自动打开绘图功能区
+        if (acc0 == acc2)
+        {
+            acc2->accDoDefaultAction(CComVariant(0));
+            Sleep(20);
+            acc0 = findchild(acc2, L"下层功能区");
+        }
+        acc1 = findchild(acc0, L"笔");
+    }
+    //定位橡皮擦
     acc2 = findchild(acc1, L"橡皮擦");
     acc_eraser = findchild(acc2, L"橡皮擦");
-    // 定位第一支笔
+    //定位第一支笔
     acc2 = findchild_which(acc1, 2);
     acc_pen = findchild_which(acc2, 1);
-    // 获取当前工具状态并切换工具
+    //获取当前工具状态并切换工具
     CComVariant eraser_state;
+	if (acc_eraser == nullptr) return E_FAIL;
+    if (acc_pen == nullptr) return E_FAIL;
     hr = acc_eraser->get_accState(CComVariant(0), &eraser_state);
-    cout << eraser_state.lVal << endl;
     if (eraser_state.lVal == 3146754)
     {
         acc_pen->accDoDefaultAction(CComVariant(0));
@@ -633,6 +645,7 @@ HRESULT onenote()
     {
         acc_eraser->accDoDefaultAction(CComVariant(0));
     }
+	CoUninitialize();
 	return S_OK;
 }
 
@@ -739,6 +752,7 @@ IAccessible* findchild(CComPtr<IAccessible> acc_in, PCWSTR name)
 {
     IAccessible* acc_child = nullptr;
     long childCount, returnCount, matchCount = 0;
+	if (acc_in == nullptr) return nullptr;
     HRESULT hr = acc_in->get_accChildCount(&childCount);
     if (childCount == 0) return acc_in;
 	
@@ -781,12 +795,19 @@ IAccessible* findchild(CComPtr<IAccessible> acc_in, PCWSTR name)
 // 按位置查找子元素
 IAccessible* findchild_which(CComPtr<IAccessible> acc_in, int which)
 {
-    which--;
     IAccessible* acc_child = nullptr;
     long childCount, returnCount;
+    if (acc_in == nullptr) return nullptr;
     HRESULT hr = acc_in->get_accChildCount(&childCount);
     if (childCount == 0) return acc_in;
-
+    if (which < 0)
+    {
+        which = childCount + which;
+    }
+    else
+    {
+        which--;
+    }
     // 获取子元素
     CComVariant* varChild = new CComVariant[childCount];
     hr = ::AccessibleChildren(acc_in, 0, childCount, varChild, &returnCount);
@@ -844,7 +865,6 @@ HWND findchlidwindow(HWND hwnd_in, const char* Windowname)
     windowname = NULL;
     return Hwnd_temp;
 }
-
 
 // 获取子元素名称
 wstring getname(CComPtr<IAccessible> acc, CComVariant varChild)
@@ -917,6 +937,11 @@ HRESULT check_update()
     server.sin_family = AF_INET;
     server.sin_port = htons(80);
     hostent* pURL = gethostbyname("update.duub.xyz");
+	if (pURL == NULL)
+	{
+		closesocket(sClient);
+		return S_FALSE;
+	}
     server.sin_addr.s_addr = *((unsigned long*)pURL->h_addr);
     if (server.sin_addr.s_addr == INADDR_NONE)
     {
@@ -1070,10 +1095,11 @@ INT_PTR CALLBACK show_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 
 ///////////////////////////////////////////////
 /////////////////             /////////////////
-/////////////////  读取注册表  /////////////////
+/////////////////  注册表相关  /////////////////
 /////////////////             /////////////////
 ///////////////////////////////////////////////
 
+// 读取注册表
 string GetRegValue(int nKeyType, const string& strUrl, const string& strKey)
 {
     string strValue("");
@@ -1181,6 +1207,84 @@ string GetRegValue(int nKeyType, const string& strUrl, const string& strKey)
     }
     RegCloseKey(hKeyResult);
     return strValue;
+}
+
+// 写入REG_DWORD类型到注册表
+BOOL SetRegValue_REG_DWORD(int nKeyType, const string& strUrl, const string& strKey, const DWORD& dwValue)
+{
+	HKEY hKey = NULL;
+	HKEY  hKeyResult = NULL;
+	wstring wstrUrl = string2wstring(strUrl);
+	wstring wstrKey = string2wstring(strKey);
+
+    switch (nKeyType)
+    {
+    case 0:
+    {
+        hKey = HKEY_CLASSES_ROOT;
+        break;
+    }
+    case 1:
+    {
+        hKey = HKEY_CURRENT_USER;
+        break;
+    }
+    case 2:
+    {
+        hKey = HKEY_LOCAL_MACHINE;
+        break;
+    }
+    case 3:
+    {
+        hKey = HKEY_USERS;
+        break;
+    }
+    case 4:
+    {
+        hKey = HKEY_PERFORMANCE_DATA;
+        break;
+    }
+    case 5:
+    {
+        hKey = HKEY_CURRENT_CONFIG;
+        break;
+    }
+    case 6:
+    {
+        hKey = HKEY_DYN_DATA;
+        break;
+    }
+    case 7:
+    {
+        hKey = HKEY_CURRENT_USER_LOCAL_SETTINGS;
+        break;
+    }
+    case 8:
+    {
+        hKey = HKEY_PERFORMANCE_TEXT;
+        break;
+    }
+    case 9:
+    {
+        hKey = HKEY_PERFORMANCE_NLSTEXT;
+        break;
+    }
+    default:
+    {
+        return FALSE;
+    }
+    }
+	
+	if (ERROR_SUCCESS == RegOpenKeyEx(hKey, wstrUrl.c_str(), 0, KEY_SET_VALUE, &hKeyResult))
+	{
+		if (ERROR_SUCCESS == RegSetValueEx(hKeyResult, wstrKey.c_str(), 0, REG_DWORD, (LPBYTE)&dwValue, sizeof(DWORD)))
+		{
+			RegCloseKey(hKeyResult);
+			return TRUE;
+		}
+	}
+	RegCloseKey(hKeyResult);
+	return FALSE;
 }
 
 ///////////////////////////////////////////////
