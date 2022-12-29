@@ -1,7 +1,7 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "0.2.2"
+#define version "0.3.0"
 
 // 全局变量
 HINSTANCE hInst;                                // 当前实例
@@ -25,39 +25,40 @@ BOOL switch_back;                               // 是否切换回原窗口
 BOOL go_update;                                 // 是否更新
 
 // 图标
-int idi_MAIN, idi_WnE, idi_SCREENSHOT, idi_COPY, idi_PASTE, idi_UNDO;
+int idi_MAIN, idi_WnE, idi_SCREENSHOT, idi_COPY, idi_NOTE, idi_PASTE, idi_UNDO;
 
 // 此代码模块中包含的函数的前向声明
-ATOM                MyRegisterClass(HINSTANCE hInstance);
-BOOL                InitInstance(HINSTANCE hInstance, int nCmdShow);
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    ToUpdate(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    show_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-INT_PTR CALLBACK    popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-void                Tray(HWND hWnd);
-void                Tray_Icon();
-HWND                findwindow(const char* Windowname);
-HWND                findchlidwindow(HWND hwnd_in, const char* Windowname);
-IAccessible*        findchild(CComPtr<IAccessible> acc_in, PCWSTR name);
-IAccessible*        findchild_which(CComPtr<IAccessible> acc_in, int which);
-wstring             getname(CComPtr<IAccessible> acc, CComVariant varChild);
-wstring             getrole(CComPtr<IAccessible> acc, CComVariant varChild);
-string              GetRegValue(int nKeyType, const string& strUrl, const string& strKey);
-BOOL                SetRegValue_REG_DWORD(int nKeyType, const string& strUrl, const string& strKey, const DWORD& dwValue);
-string              midstr(string str, PCSTR start, PCSTR end);
-string              wstring2string(const wstring& ws);
-wstring             string2wstring(const string& s);
-BOOL                get_if_dark();
-void                switch_dark(BOOL if_dark);
-HRESULT             check_update();
-HRESULT             update(HWND hWnd, int state);
-HRESULT             onenote(HWND hwnd_onenote);
-bool                drawboard(bool writing);
-void*               main_thread(void* arg);
-void*               F19_1(void* arg);
-void*               F19_2(void* arg);
-void*               auto_switch_back(void* arg);
-void*               light_or_dark(void* arg);
+ATOM                    MyRegisterClass(HINSTANCE hInstance);
+BOOL                    InitInstance(HINSTANCE hInstance, int nCmdShow);
+LRESULT CALLBACK        WndProc(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK        ToUpdate(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK        show_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK        popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+void                    Tray(HWND hWnd);
+void                    Tray_Icon();
+HWND                    findwindow(const char* Windowname);
+HWND                    findchlidwindow(HWND hwnd_in, const char* Windowname);
+CComPtr<IAccessible>    findchild(CComPtr<IAccessible> acc_in, const wchar_t* name);
+CComPtr<IAccessible>    findchild_which(CComPtr<IAccessible> acc_in, int which);
+wstring                 getname(CComPtr<IAccessible> acc, CComVariant varChild);
+wstring                 getrole(CComPtr<IAccessible> acc, CComVariant varChild);
+string                  GetRegValue(int nKeyType, const string& strUrl, const string& strKey);
+BOOL                    SetRegValue_REG_DWORD(int nKeyType, const string& strUrl, const string& strKey, const DWORD& dwValue);
+string                  midstr(string str, PCSTR start, PCSTR end);
+string                  wstring2string(const wstring& ws);
+wstring                 string2wstring(const string& s);
+BOOL                    get_if_dark();
+void                    switch_dark(BOOL if_dark);
+HRESULT                 check_update();
+HRESULT                 update(HWND hWnd, int state);
+HRESULT                 onenote(HWND hwnd_onenote);
+bool                    drawboard(bool writing);
+void*                   main_thread(void* arg);
+void*                   F19_1(void* arg);
+void*                   F19_2(void* arg);
+void*                   auto_switch_back(void* arg);
+void*                   light_or_dark(void* arg);
+void*                   ink_setting_lock(void* arg);
 
 ///////////////////////////////////////////////
 /////////////////             /////////////////
@@ -103,6 +104,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     ret5 = pthread_create(&tid5, NULL, light_or_dark, NULL);
     if (ret5 != 0) return -1;
     ret5 = pthread_detach(tid5);
+
+    pthread_t  tid6;
+    int ret6;
+    ret6 = pthread_create(&tid6, NULL, ink_setting_lock, NULL);
+    if (ret6 != 0) return -1;
+    ret6 = pthread_detach(tid6);
 	
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_MATEBOOKEPEN, szWindowClass, MAX_LOADSTRING);
@@ -242,9 +249,17 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
             SetTimer(hDlg, 1, 3000, NULL);
             return (INT_PTR)TRUE;
         }
+        if (LOWORD(wParam) == IDC_NOTE)
+        {
+            state = IDC_SCREENSHOT;
+            Tray_Icon();
+            SetDlgItemText(hDlg, IDC_MODE, L"批注模式");
+            SetTimer(hDlg, 1, 3000, NULL);
+            return (INT_PTR)TRUE;
+        }
         if (LOWORD(wParam) == IDC_COPY)
         {
-            state = IDI_SCREENSHOT;
+            state = IDC_NOTE;
             Tray_Icon();
 			SetDlgItemText(hDlg, IDC_MODE, L"复制模式");
             SetTimer(hDlg, 1, 3000, NULL);
@@ -276,6 +291,9 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
             break;
         case IDI_SCREENSHOT:
             SetDlgItemText(hDlg, IDC_MODE, L"截图模式");
+            break;
+        case IDI_NOTE:
+            SetDlgItemText(hDlg, IDC_MODE, L"批注模式");
             break;
         case IDI_COPY:
             SetDlgItemText(hDlg, IDC_MODE, L"复制模式");
@@ -374,8 +392,8 @@ void Tray_Icon()
         DestroyIcon(nid.hIcon);
         if (if_used == 0)
         {
-            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
-            state = IDI_COPY;
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_NOTE));
+            state = IDI_NOTE;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
         }
 		else
@@ -384,6 +402,16 @@ void Tray_Icon()
 			state = IDI_PASTE;
 			Shell_NotifyIcon(NIM_MODIFY, &nid);
 		}
+        if_used = 0;
+        switch_back = TRUE;
+        break;
+    }
+    case IDI_NOTE:
+    {
+        DestroyIcon(nid.hIcon);
+        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
+        state = IDI_COPY;
+        Shell_NotifyIcon(NIM_MODIFY, &nid);
         if_used = 0;
         switch_back = TRUE;
         break;
@@ -479,6 +507,16 @@ void* main_thread(void* arg)
                 BUTTON = FALSE;
                 if_used++;
                 Tray_Icon();
+            }
+            break;
+        }
+        case IDI_NOTE:
+        {
+            if (BUTTON)
+            {
+                ShellExecute(NULL, _T("open"), _T("PenKit.exe"), NULL, _T("C:\\Program Files\\Huawei\\PenKit"), SW_SHOW);
+                BUTTON = FALSE;
+                if_used++;
             }
             break;
         }
@@ -592,11 +630,11 @@ HRESULT onenote(HWND hwnd_onenote)
 {
     hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	
-    IAccessible* acc0 = nullptr;
-    IAccessible* acc1 = nullptr;
-    IAccessible* acc2 = nullptr;
-    IAccessible* acc_eraser = nullptr;
-    IAccessible* acc_pen = nullptr;
+    CComPtr<IAccessible> acc0 = nullptr;
+    CComPtr<IAccessible> acc1 = nullptr;
+    CComPtr<IAccessible> acc2 = nullptr;
+    CComPtr<IAccessible> acc_eraser = nullptr;
+    CComPtr<IAccessible> acc_pen = nullptr;
     HWND hwnd_child = nullptr;
 	
 	hwnd_child = FindWindowEx(hwnd_onenote, NULL, L"Windows.UI.Core.CoreWindow", NULL);
@@ -689,8 +727,11 @@ void* light_or_dark(void* arg)
             case IDI_SCREENSHOT:
                 state = IDI_WnE;
                 break;
-            case IDI_COPY:
+            case IDI_NOTE:
                 state = IDI_SCREENSHOT;
+                break;
+            case IDI_COPY:
+                state = IDI_NOTE;
                 break;
             case IDI_PASTE:
                 state = IDI_COPY;
@@ -724,6 +765,7 @@ void switch_dark(BOOL if_dark)
         idi_MAIN = IDI_MAIN_DARK;
         idi_WnE = IDI_WnE_DARK;
         idi_SCREENSHOT = IDI_SCREENSHOT_DARK;
+		idi_NOTE = IDI_NOTE_DARK;
         idi_COPY = IDI_COPY_DARK;
         idi_PASTE = IDI_PASTE_DARK;
         idi_UNDO = IDI_UNDO_DARK;
@@ -734,6 +776,7 @@ void switch_dark(BOOL if_dark)
         idi_MAIN = IDI_MAIN;
         idi_WnE = IDI_WnE;
         idi_SCREENSHOT = IDI_SCREENSHOT;
+		idi_NOTE = IDI_NOTE;
         idi_COPY = IDI_COPY;
         idi_PASTE = IDI_PASTE;
         idi_UNDO = IDI_UNDO;
@@ -743,23 +786,47 @@ void switch_dark(BOOL if_dark)
 
 ////////////////////////////////////////////////////
 /////////////////                  /////////////////
+/////////////////  锁定win ink设置  /////////////////
+/////////////////                  /////////////////
+////////////////////////////////////////////////////
+
+void* ink_setting_lock(void* arg)
+{
+    while (1)
+    {
+        Sleep(5000);
+        string ink_setting = GetRegValue(1, "Software\\Microsoft\\Windows\\CurrentVersion\\ClickNote\\UserCustomization\\DoubleClickBelowLock", "Override");
+        if (ink_setting != "1")
+        {
+            SetRegValue_REG_DWORD(1, "Software\\Microsoft\\Windows\\CurrentVersion\\ClickNote\\UserCustomization\\DoubleClickBelowLock", "Override", (DWORD)1);
+        }
+    }
+    return NULL;
+}
+
+////////////////////////////////////////////////////
+/////////////////                  /////////////////
 /////////////////   寻找窗口/元素   /////////////////
 /////////////////                  /////////////////
 ////////////////////////////////////////////////////
 
 // 按名称查找子元素
-IAccessible* findchild(CComPtr<IAccessible> acc_in, PCWSTR name)
+CComPtr<IAccessible> findchild(CComPtr<IAccessible> acc_in, const wchar_t* name)
 {
-    IAccessible* acc_child = nullptr;
+    CComPtr<IAccessible> acc_child = nullptr;
     long childCount, returnCount, matchCount = 0;
 	if (acc_in == nullptr) return nullptr;
     HRESULT hr = acc_in->get_accChildCount(&childCount);
     if (childCount == 0) return acc_in;
 	
     // 获取子元素
-    CComVariant* varChild = new CComVariant[childCount];
-    hr = ::AccessibleChildren(acc_in, 0, childCount, varChild, &returnCount);
-    if (hr != S_OK) return acc_in;
+    std::unique_ptr<VARIANT[]> varChild(new VARIANT[childCount]);
+    hr = ::AccessibleChildren(acc_in, 0, childCount, varChild.get(), &returnCount);
+    if (hr != S_OK)
+    {
+        varChild.reset();
+        return acc_in;
+    }
 	
     // 返回当前子元素个数
     current_count = returnCount;
@@ -767,13 +834,14 @@ IAccessible* findchild(CComPtr<IAccessible> acc_in, PCWSTR name)
 	// 遍历子元素并寻找包含名称的子元素
     for (int i = 0; i < returnCount; i++)
     {
-        CComVariant vtChild = varChild[i];
+        VARIANT vtChild = varChild[i];
         if (vtChild.vt == VT_DISPATCH)
         {
             CComQIPtr<IAccessible> pAccChild = varChild[i].pdispVal;
             if (!pAccChild) continue;
 
-            if (StrStr(getname(pAccChild, CHILDID_SELF).data(), name) != NULL)
+            wstring child_name = getname(pAccChild, CHILDID_SELF);
+            if (child_name.find(name) != wstring::npos)
             {
                 acc_child = pAccChild;
                 matchCount++;
@@ -784,18 +852,20 @@ IAccessible* findchild(CComPtr<IAccessible> acc_in, PCWSTR name)
 	// 只允许找到一个符合的子元素
     if (matchCount == 1)
     {
+        varChild.reset();
         return acc_child;
     }
     else
     {
+		varChild.reset();
         return acc_in;
     }
 }
 
 // 按位置查找子元素
-IAccessible* findchild_which(CComPtr<IAccessible> acc_in, int which)
+CComPtr<IAccessible> findchild_which(CComPtr<IAccessible> acc_in, int which)
 {
-    IAccessible* acc_child = nullptr;
+    CComPtr<IAccessible> acc_child = nullptr;
     long childCount, returnCount;
     if (acc_in == nullptr) return nullptr;
     HRESULT hr = acc_in->get_accChildCount(&childCount);
@@ -809,25 +879,31 @@ IAccessible* findchild_which(CComPtr<IAccessible> acc_in, int which)
         which--;
     }
     // 获取子元素
-    CComVariant* varChild = new CComVariant[childCount];
-    hr = ::AccessibleChildren(acc_in, 0, childCount, varChild, &returnCount);
-    if (hr != S_OK) return acc_in;
+    std::unique_ptr<VARIANT[]> varChild(new VARIANT[childCount]);
+    hr = ::AccessibleChildren(acc_in, 0, childCount, varChild.get(), &returnCount);
+    if (hr != S_OK)
+    {
+        varChild.reset();
+        return acc_in;
+    }
 
     // 检查输入合法性并返回当前子元素个数
     if (returnCount < which) return acc_in;
     current_count = returnCount;
     
 	// 寻找目标子元素并返回
-    CComVariant vtChild = varChild[which];
+    VARIANT vtChild = varChild[which];
     if (vtChild.vt == VT_DISPATCH)
     {
         CComQIPtr<IAccessible> pAccChild = varChild[which].pdispVal;
         if (!pAccChild) return acc_in;
         acc_child = pAccChild;
+		varChild.reset();
         return acc_child;
     }
     else
     {
+        varChild.reset();
         return acc_in;
     }
 }

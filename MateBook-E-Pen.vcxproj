@@ -156,6 +156,8 @@
     <Image Include="ico\copy_dark.ico" />
     <Image Include="ico\main.ico" />
     <Image Include="ico\main_dark.ico" />
+    <Image Include="ico\note.ico" />
+    <Image Include="ico\note_dark.ico" />
     <Image Include="ico\paste.ico" />
     <Image Include="ico\paste_dark.ico" />
     <Image Include="ico\screenshot.ico" />

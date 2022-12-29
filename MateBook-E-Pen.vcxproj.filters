@@ -57,6 +57,30 @@
     <Image Include="ico\W&amp;E.ico">
       <Filter>资源文件</Filter>
     </Image>
+    <Image Include="ico\copy_dark.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\main_dark.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\paste_dark.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\screenshot_dark.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\undo_dark.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\W&amp;E_dark.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\note.ico">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\note_dark.ico">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
