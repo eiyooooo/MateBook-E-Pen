@@ -1,7 +1,7 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "0.3.0"
+#define version "0.3.1"
 
 // 全局变量
 HINSTANCE hInst;                                // 当前实例
@@ -23,6 +23,8 @@ HWND hwnd_temp;     						    // 窗口句柄
 int if_used;                                    // 使用情况计数
 BOOL switch_back;                               // 是否切换回原窗口
 BOOL go_update;                                 // 是否更新
+BOOL note_pic_copy_running = FALSE;             // 是否正在运行复制批注
+WCHAR temp_file[MAX_PATH];                      // 批注模式临时文件路径
 
 // 图标
 int idi_MAIN, idi_WnE, idi_SCREENSHOT, idi_COPY, idi_NOTE, idi_PASTE, idi_UNDO;
@@ -53,12 +55,14 @@ HRESULT                 check_update();
 HRESULT                 update(HWND hWnd, int state);
 HRESULT                 onenote(HWND hwnd_onenote);
 bool                    drawboard(bool writing);
-void*                   main_thread(void* arg);
-void*                   F19_1(void* arg);
-void*                   F19_2(void* arg);
-void*                   auto_switch_back(void* arg);
-void*                   light_or_dark(void* arg);
-void*                   ink_setting_lock(void* arg);
+int                     CopyFileToClipboard(WCHAR szFileName[MAX_PATH]);
+void*                   main_thread();
+void*                   F19_1();
+void*                   F19_2();
+void*                   auto_switch_back();
+void*                   light_or_dark();
+void*                   ink_setting_lock();
+void*                   note_pic_copy();
 
 ///////////////////////////////////////////////
 /////////////////             /////////////////
@@ -75,41 +79,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 	switch_dark(get_if_dark());
 	
-    pthread_t  tid1;
-    int ret;
-    ret = pthread_create(&tid1, NULL, main_thread, NULL);
-    if (ret != 0) return -1;
-    ret = pthread_detach(tid1);
+	thread tid1(main_thread);
+	tid1.detach();
 	
-    pthread_t  tid2;
-    int ret2;
-    ret2 = pthread_create(&tid2, NULL, F19_1, NULL);
-    if (ret2 != 0) return -1;
-    ret2 = pthread_detach(tid2);
-	
-    pthread_t  tid3;
-    int ret3;
-    ret3 = pthread_create(&tid3, NULL, F19_2, NULL);
-    if (ret3 != 0) return -1;
-    ret3 = pthread_detach(tid3);
-	
-    pthread_t  tid4;
-    int ret4;
-    ret4 = pthread_create(&tid4, NULL, auto_switch_back, NULL);
-    if (ret4 != 0) return -1;
-    ret4 = pthread_detach(tid4);
+	thread tid2(F19_1);
+	tid2.detach();
 
-    pthread_t  tid5;
-    int ret5;
-    ret5 = pthread_create(&tid5, NULL, light_or_dark, NULL);
-    if (ret5 != 0) return -1;
-    ret5 = pthread_detach(tid5);
-
-    pthread_t  tid6;
-    int ret6;
-    ret6 = pthread_create(&tid6, NULL, ink_setting_lock, NULL);
-    if (ret6 != 0) return -1;
-    ret6 = pthread_detach(tid6);
+	thread tid3(F19_2);
+	tid3.detach();
+	
+	thread tid4(auto_switch_back);
+	tid4.detach();
+	
+	thread tid5(light_or_dark);
+	tid5.detach();
+	
+	thread tid6(ink_setting_lock);
+	tid6.detach();
 	
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_MATEBOOKEPEN, szWindowClass, MAX_LOADSTRING);
@@ -251,7 +237,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         }
         if (LOWORD(wParam) == IDC_NOTE)
         {
-            state = IDC_SCREENSHOT;
+            state = IDI_SCREENSHOT;
             Tray_Icon();
             SetDlgItemText(hDlg, IDC_MODE, L"批注模式");
             SetTimer(hDlg, 1, 3000, NULL);
@@ -259,7 +245,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         }
         if (LOWORD(wParam) == IDC_COPY)
         {
-            state = IDC_NOTE;
+            state = IDI_NOTE;
             Tray_Icon();
 			SetDlgItemText(hDlg, IDC_MODE, L"复制模式");
             SetTimer(hDlg, 1, 3000, NULL);
@@ -409,9 +395,18 @@ void Tray_Icon()
     case IDI_NOTE:
     {
         DestroyIcon(nid.hIcon);
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
-        state = IDI_COPY;
-        Shell_NotifyIcon(NIM_MODIFY, &nid);
+        if (if_used == 0)
+        {
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
+            state = IDI_COPY;
+            Shell_NotifyIcon(NIM_MODIFY, &nid);
+        }
+        else
+        {
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
+            state = IDI_PASTE;
+            Shell_NotifyIcon(NIM_MODIFY, &nid);
+        }
         if_used = 0;
         switch_back = TRUE;
         break;
@@ -465,7 +460,7 @@ void Tray_Icon()
 /////////////////             /////////////////
 ///////////////////////////////////////////////
 
-void* main_thread(void* arg)
+void* main_thread()
 {
     char title[256];
 	bool writing = true;
@@ -514,8 +509,13 @@ void* main_thread(void* arg)
         {
             if (BUTTON)
             {
-                ShellExecute(NULL, _T("open"), _T("PenKit.exe"), NULL, _T("C:\\Program Files\\Huawei\\PenKit"), SW_SHOW);
+                ShellExecute(NULL, _T("open"), _T("PenKit.exe"), NULL, _T("%programfiles%\\Huawei\\PenKit"), SW_SHOW);
                 BUTTON = FALSE;
+                if (if_used == 0)
+                {
+                    thread tid7(note_pic_copy);
+                    tid7.detach();
+                }
                 if_used++;
             }
             break;
@@ -536,6 +536,7 @@ void* main_thread(void* arg)
         }
 		case IDI_PASTE:
         {
+            if (note_pic_copy_running == TRUE) DeleteFile(temp_file);
             if (BUTTON)
             {
                 keybd_event(VK_CONTROL, 0, 0, 0);
@@ -570,7 +571,7 @@ void* main_thread(void* arg)
 }
 
 // 软件打开时持续检测侧键是否双击
-void* F19_1(void* arg)
+void* F19_1()
 {
     while (1)
     {
@@ -581,7 +582,7 @@ void* F19_1(void* arg)
         }
     }
 }
-void* F19_2(void* arg)
+void* F19_2()
 {
     Sleep(1);
     while (1)
@@ -594,7 +595,7 @@ void* F19_2(void* arg)
     }
 }
 
-void* auto_switch_back(void* arg)
+void* auto_switch_back()
 {
     HWND hwnd_current = nullptr, a = nullptr, b = nullptr;
     while (1)
@@ -702,13 +703,105 @@ bool drawboard(bool writing)
     }
 }
 
+void* note_pic_copy()
+{
+	note_pic_copy_running = TRUE;
+    
+    WCHAR note_save_path[MAX_PATH];
+    SHGetFolderPathW(NULL, CSIDL_MYPICTURES, NULL, SHGFP_TYPE_CURRENT, note_save_path);
+    wcscat_s(note_save_path, L"\\HUAWEIPenPictures\\");
+	
+	wcscpy_s(temp_file, note_save_path);
+	wcscat_s(temp_file, L"temp.txt");
+    ofstream out(temp_file);
+    out.close();
+	
+    Sleep(500);
+
+    HANDLE hDir;
+    BYTE* pBuffer = (LPBYTE)new CHAR[4096];
+    DWORD dwBufferSize;
+    WCHAR szFileName[MAX_PATH];
+    PFILE_NOTIFY_INFORMATION pNotify = (PFILE_NOTIFY_INFORMATION)pBuffer;
+
+    hDir = CreateFile(note_save_path, FILE_LIST_DIRECTORY,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+        NULL);
+
+    if (hDir == INVALID_HANDLE_VALUE) return 0;
+
+    while (1)
+    {
+        if (ReadDirectoryChangesW(hDir,
+            pBuffer, 4096, TRUE,
+            FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
+            &dwBufferSize, NULL, NULL))
+        {
+            memset(szFileName, 0, MAX_PATH);
+            memcpy(szFileName, note_save_path, wcslen(note_save_path) * sizeof(WCHAR));
+            memcpy(szFileName + wcslen(note_save_path), pNotify->FileName, pNotify->FileNameLength);
+
+            if (pNotify->Action == FILE_ACTION_ADDED) CopyFileToClipboard(szFileName);
+        }
+        if (if_used == 0)
+        {
+			note_pic_copy_running = FALSE;
+            return 0;
+        }
+    }
+}
+
+int CopyFileToClipboard(WCHAR FileName[MAX_PATH])
+{
+    char szFileName[MAX_PATH];
+    WideCharToMultiByte(CP_ACP, 0, FileName, -1, szFileName, MAX_PATH, NULL, NULL);
+
+    UINT uDropEffect;
+    HGLOBAL hGblEffect;
+    LPDWORD lpdDropEffect;
+    DROPFILES stDrop;
+
+    HGLOBAL hGblFiles;
+    LPSTR lpData;
+
+    uDropEffect = RegisterClipboardFormatA("Preferred DropEffect");
+    hGblEffect = GlobalAlloc(GMEM_ZEROINIT | GMEM_MOVEABLE | GMEM_DDESHARE, sizeof(DWORD));
+    lpdDropEffect = (LPDWORD)GlobalLock(hGblEffect);
+    *lpdDropEffect = DROPEFFECT_COPY;
+    GlobalUnlock(hGblEffect);
+
+    stDrop.pFiles = sizeof(DROPFILES);
+    stDrop.pt.x = 0;
+    stDrop.pt.y = 0;
+    stDrop.fNC = FALSE;
+    stDrop.fWide = FALSE;
+
+    hGblFiles = GlobalAlloc(GMEM_ZEROINIT | GMEM_MOVEABLE | GMEM_DDESHARE, \
+        sizeof(DROPFILES) + strlen(szFileName) + 2);
+    lpData = (LPSTR)GlobalLock(hGblFiles);
+    memcpy(lpData, &stDrop, sizeof(DROPFILES));
+    strcpy_s(lpData + sizeof(DROPFILES), strlen(szFileName) + 2, szFileName);
+    GlobalUnlock(hGblFiles);
+
+    OpenClipboard(NULL);
+    EmptyClipboard();
+    SetClipboardData(CF_HDROP, hGblFiles);
+    SetClipboardData(uDropEffect, hGblEffect);
+    CloseClipboard();
+
+    return 1;
+}
+
 ////////////////////////////////////////////////
 /////////////////              /////////////////
 /////////////////  深/浅色切换  /////////////////
 /////////////////              /////////////////
 ////////////////////////////////////////////////
 
-void* light_or_dark(void* arg)
+void* light_or_dark()
 {
     Sleep(3000);
     BOOL if_dark = get_if_dark();
@@ -790,7 +883,7 @@ void switch_dark(BOOL if_dark)
 /////////////////                  /////////////////
 ////////////////////////////////////////////////////
 
-void* ink_setting_lock(void* arg)
+void* ink_setting_lock()
 {
     while (1)
     {

@@ -1,12 +1,14 @@
 #pragma once
 
 #include "resource.h"
-#include "pthread.h"
+#include "thread"
 #include "iostream"
 #include "atlbase.h"
 #include "comutil.h"
 #include "shellapi.h"
 #include "string"
+#include "Shlobj.h"
+#include "fstream"
 
 using namespace std;
 using namespace ATL;
