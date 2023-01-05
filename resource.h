@@ -8,7 +8,6 @@
 #define IDR_MAINFRAME                   128
 #define IDI_MAIN                        136
 #define IDD_UPDATE                      142
-#define IDD_UPTODATE                    143
 #define IDD_UPDATEFAILED                144
 #define IDI_COPY                        145
 #define IDI_PASTE                       146
@@ -38,9 +37,7 @@
 #define IDC_PASTE                       1012
 #define IDC_UNDO                        1013
 #define IDC_S7                          1014
-#define IDC_S8                          1015
 #define IDC_MODE                        1015
-#define IDC_SCREENSHOT2                 1016
 #define IDC_NOTE                        1016
 #define IDC_S6                          -1
 

@@ -1,68 +1,83 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "0.3.1"
+#define version "0.4.0"
 
-// 全局变量
-HINSTANCE hInst;                                // 当前实例
-WCHAR szTitle[MAX_LOADSTRING];                  // 标题栏文本
-WCHAR szWindowClass[MAX_LOADSTRING];            // 主窗口类名
-HWND inst_hwnd;                                 // 主窗口句柄
-HWND hwnd_popup;                                // 弹出窗口句柄
-NOTIFYICONDATA nid;                             // 托盘图标结构体
-int state;                                      // 当前托盘图标
-HMENU hMenu;    					    		// 菜单句柄
-HRESULT hr;                                     // HRESULT
-long current_count = 0;                         // 当前子元素的数量
-BOOL BUTTON = FALSE;                            // 笔侧键是否按下
-string update_version;  					    // 更新版本号
-string update_info; 			  			    // 更新信息
+/////////////////////////////////////////////
+/////////////////           /////////////////
+/////////////////   初始化   /////////////////
+/////////////////           /////////////////
+/////////////////////////////////////////////
 
-const char* windowname;                         // 寻找的窗口名
-HWND hwnd_temp;     						    // 窗口句柄
-int if_used;                                    // 使用情况计数
-BOOL switch_back;                               // 是否切换回原窗口
-BOOL go_update;                                 // 是否更新
-BOOL note_pic_copy_running = FALSE;             // 是否正在运行复制批注
-WCHAR temp_file[MAX_PATH];                      // 批注模式临时文件路径
+void init(HWND hWnd)
+{
+	// 图标初始化(仅首次)
+    if (if_init == FALSE) Tray(hWnd);
 
-// 图标
-int idi_MAIN, idi_WnE, idi_SCREENSHOT, idi_COPY, idi_NOTE, idi_PASTE, idi_UNDO;
+	show_message(L"初始化中", L"大概需要8秒，请稍等...");
+	
+	// 第一步
+    if (isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
+    {
+		killProcess(L"HuaweiPenAPP.exe");
+    }
+	Sleep(500);
+	
+	// 第二步
+    vector<wstring> xmlfileNames = findfiles(L"C:\\ProgramData\\Huawei\\HuaweiPenAPP\\", L"*.xml");
+    for (int i = 0; i < xmlfileNames.size(); i++)
+    {
+        wcout << xmlfileNames[i] << endl;
+        modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"3");
+    }
+    Sleep(500);
+	
+	// 第三步
+    ShellExecute(NULL, _T("open"), _T("HuaweiPenAPP.exe"), NULL, _T("%programfiles%\\Huawei\\HuaweiPen"), SW_SHOW);
+    Sleep(1000);
+	
+	// 第四步
+    if (isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
+    {
+        killProcess(L"HuaweiPenAPP.exe");
+    }
+    Sleep(500);
 
-// 此代码模块中包含的函数的前向声明
-ATOM                    MyRegisterClass(HINSTANCE hInstance);
-BOOL                    InitInstance(HINSTANCE hInstance, int nCmdShow);
-LRESULT CALLBACK        WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK        ToUpdate(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK        show_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-INT_PTR CALLBACK        popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-void                    Tray(HWND hWnd);
-void                    Tray_Icon();
-HWND                    findwindow(const char* Windowname);
-HWND                    findchlidwindow(HWND hwnd_in, const char* Windowname);
-CComPtr<IAccessible>    findchild(CComPtr<IAccessible> acc_in, const wchar_t* name);
-CComPtr<IAccessible>    findchild_which(CComPtr<IAccessible> acc_in, int which);
-wstring                 getname(CComPtr<IAccessible> acc, CComVariant varChild);
-wstring                 getrole(CComPtr<IAccessible> acc, CComVariant varChild);
-string                  GetRegValue(int nKeyType, const string& strUrl, const string& strKey);
-BOOL                    SetRegValue_REG_DWORD(int nKeyType, const string& strUrl, const string& strKey, const DWORD& dwValue);
-string                  midstr(string str, PCSTR start, PCSTR end);
-string                  wstring2string(const wstring& ws);
-wstring                 string2wstring(const string& s);
-BOOL                    get_if_dark();
-void                    switch_dark(BOOL if_dark);
-HRESULT                 check_update();
-HRESULT                 update(HWND hWnd, int state);
-HRESULT                 onenote(HWND hwnd_onenote);
-bool                    drawboard(bool writing);
-int                     CopyFileToClipboard(WCHAR szFileName[MAX_PATH]);
-void*                   main_thread();
-void*                   F19_1();
-void*                   F19_2();
-void*                   auto_switch_back();
-void*                   light_or_dark();
-void*                   ink_setting_lock();
-void*                   note_pic_copy();
+	// 第五步
+    for (int i = 0; i < xmlfileNames.size(); i++)
+    {
+        wcout << xmlfileNames[i] << endl;
+        modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"2");
+    }
+    Sleep(500);
+
+	// 第六步
+    ShellExecute(NULL, _T("open"), _T("HuaweiPenAPP.exe"), NULL, _T("%programfiles%\\Huawei\\HuaweiPen"), SW_SHOW);
+    Sleep(1000);
+	
+    // 第七步
+    SetRegValue_REG_DWORD(1, "Software\\Microsoft\\Windows\\CurrentVersion\\ClickNote\\UserCustomization\\DoubleClickBelowLock", "Override", (DWORD)1);
+	
+	// 检查更新(仅首次)
+    if (if_init == FALSE)
+    {
+        if (check_update() == S_OK)
+        {
+            if (StrCmpA(update_version.c_str(), version) != 0)
+            {
+                update(hWnd, CanUpdate);
+            }
+        }
+    }
+
+    show_message(L"初始化完成", L"若功能无法使用请重新初始化");
+	
+    // 图标初始化(仅首次)
+    if (if_init == FALSE) Tray_Icon();
+
+    // 结束初始化
+    if_init = TRUE;
+}
 
 ///////////////////////////////////////////////
 /////////////////             /////////////////
@@ -136,19 +151,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
     case WM_CREATE:
-		SetRegValue_REG_DWORD(1, "Software\\Microsoft\\Windows\\CurrentVersion\\ClickNote\\UserCustomization\\DoubleClickBelowLock", "Override", (DWORD)1);
-		
-		inst_hwnd = hWnd,hwnd_popup = hWnd;
-        Tray(hWnd);
-        if (check_update() == S_OK)
         {
-            if (StrCmpA(update_version.c_str(), version) != 0)
-			{
-                update(hWnd, CanUpdate);
-			}
+            inst_hwnd = hWnd, hwnd_popup = hWnd;
+	    	init(hWnd);
+	    	break;
         }
-        Tray_Icon();
-        break;
     case WM_SIZE:
         if (wParam == SIZE_MINIMIZED)
         {
@@ -189,6 +196,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
 				else update(hWnd, CheckUpdateFailed);
             }
+            if (clicked == RE_INIT)
+			{
+				init(hWnd);
+			}
         }
     break;
     case WM_DESTROY:
@@ -339,15 +350,26 @@ void Tray(HWND hWnd)
     nid.cbSize = (DWORD)sizeof(NOTIFYICONDATA);
     nid.hWnd = hWnd;
     nid.uID = IDR_MAINFRAME;
-    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_INFO;
     nid.uCallbackMessage = WM_TRAY;
     nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_MAIN));
     state = IDI_MAIN;
     wcscpy_s(nid.szTip, _T("MateBook E Pen"));
     Shell_NotifyIcon(NIM_ADD, &nid);
     hMenu = CreatePopupMenu();
+    AppendMenu(hMenu, MF_STRING, RE_INIT, _T("重新初始化"));
     AppendMenu(hMenu, MF_STRING, UPDATE, _T("检查更新"));
 	AppendMenu(hMenu, MF_STRING, CLOSE, _T("退出"));
+}
+
+void show_message(const wchar_t* title, const wchar_t* message)
+{
+    wcscpy_s(nid.szInfoTitle, title);
+	wcscpy_s(nid.szInfo, message);
+	nid.dwInfoFlags = NIIF_INFO;
+	Shell_NotifyIcon(NIM_MODIFY, &nid);
+	wcscpy_s(nid.szInfoTitle, L"");
+	wcscpy_s(nid.szInfo, L"");
 }
 
 void Tray_Icon()
@@ -897,11 +919,11 @@ void* ink_setting_lock()
     return NULL;
 }
 
-////////////////////////////////////////////////////
-/////////////////                  /////////////////
-/////////////////   寻找窗口/元素   /////////////////
-/////////////////                  /////////////////
-////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////
+/////////////////                           /////////////////
+/////////////////   窗口/元素/进程/文件相关   /////////////////
+/////////////////                           /////////////////
+/////////////////////////////////////////////////////////////
 
 // 按名称查找子元素
 CComPtr<IAccessible> findchild(CComPtr<IAccessible> acc_in, const wchar_t* name)
@@ -1063,6 +1085,107 @@ wstring getrole(CComPtr<IAccessible> acc, CComVariant varChild)
     return sRoleBuff;
 }
 
+// 检查程序进程是否运行
+BOOL isProgramRunning(const wchar_t* program_name)
+{
+    BOOL ret = FALSE;
+    HANDLE handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (handle == INVALID_HANDLE_VALUE) return FALSE;
+
+    PROCESSENTRY32W program_info;
+    program_info.dwSize = sizeof(PROCESSENTRY32W);
+    int bResult = Process32FirstW(handle, &program_info);
+    if (!bResult) return FALSE;
+
+    while (bResult)
+    {
+		if (wcscmp(program_info.szExeFile, program_name) == 0)
+        {
+            ret = TRUE;
+            break;
+        }
+        bResult = Process32Next(handle, &program_info);
+    }
+    CloseHandle(handle);
+    return ret;
+}
+
+// 结束程序进程
+BOOL killProcess(const wchar_t* program_name)
+{
+	BOOL ret = FALSE;
+	HANDLE handle = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (handle == INVALID_HANDLE_VALUE) return FALSE;
+
+	PROCESSENTRY32W program_info;
+	program_info.dwSize = sizeof(PROCESSENTRY32W);
+	int bResult = Process32FirstW(handle, &program_info);
+	if (!bResult) return FALSE;
+
+	while (bResult)
+	{
+		if (wcscmp(program_info.szExeFile, program_name) == 0)
+		{
+			HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, program_info.th32ProcessID);
+			if (hProcess != NULL)
+			{
+				ret = TerminateProcess(hProcess, 0);
+				CloseHandle(hProcess);
+			}
+			break;
+		}
+		bResult = Process32Next(handle, &program_info);
+	}
+	CloseHandle(handle);
+	return ret;
+}
+
+// 查找指定格式文件
+vector<wstring> findfiles(wstring filePath, wstring fileFormat)
+{
+    wstring searchPath = filePath + fileFormat;
+    HANDLE hFind;
+    WIN32_FIND_DATA fileInfo;
+    vector<wstring> fileNames;
+
+    hFind = FindFirstFile(searchPath.c_str(), &fileInfo);
+    if (hFind != INVALID_HANDLE_VALUE)
+    {
+        do
+        {
+            wstring fileName = filePath;
+            fileNames.push_back(fileName.append(fileInfo.cFileName));
+        } while (FindNextFile(hFind, &fileInfo));
+    }
+    FindClose(hFind);
+    return fileNames;
+}
+
+// 修改文件中两个字符串之间的文本
+BOOL modify_file_text(string file_name, wstring start_str, wstring end_str, wstring new_text)
+{
+    std::wfstream file(file_name, std::ios::in | std::ios::out);
+    if (!file.is_open()) return FALSE;
+
+    std::wstring content((std::istreambuf_iterator<wchar_t>(file)),
+        std::istreambuf_iterator<wchar_t>());
+
+    std::size_t start_pos = content.find(start_str);
+    if (start_pos != std::wstring::npos) {
+        std::size_t end_pos = content.find(end_str, start_pos + start_str.size());
+        if (end_pos != std::wstring::npos) {
+            content.replace(start_pos + start_str.size(), end_pos - start_pos - start_str.size(), new_text);
+        }
+    }
+
+    file.seekp(0);
+    file << content;
+
+    file.close();
+
+    return TRUE;
+}
+
 ///////////////////////////////////////////////
 /////////////////             /////////////////
 /////////////////   检查更新   /////////////////
@@ -1179,7 +1302,7 @@ HRESULT update(HWND hWnd, int state)
     }
     if (state == UpToDate)
     {
-        DialogBox(hInst, MAKEINTRESOURCE(IDD_UPTODATE), hWnd, show_error);
+		show_message(L"检查更新", L"已经是最新版本!");
         return S_OK;
     }
     if (state == CheckUpdateFailed)
