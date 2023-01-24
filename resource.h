@@ -24,6 +24,14 @@
 #define IDD_POPUP                       157
 #define IDI_NOTE                        158
 #define IDI_NOTE_DARK                   159
+#define IDB_COPY                        160
+#define IDB_MAIN                        161
+#define IDB_NOTE                        162
+#define IDB_PASTE                       163
+#define IDB_SCREENSHOT                  164
+#define IDB_UNDO                        165
+#define IDB_WnE                         166
+#define IDR_MENU1                       167
 #define IDC_S1                          1004
 #define IDC_S2                          1005
 #define IDC_S3                          1006
@@ -39,6 +47,16 @@
 #define IDC_S7                          1014
 #define IDC_MODE                        1015
 #define IDC_NOTE                        1016
+#define ID_1_32773                      32773
+#define ID_1_32774                      32774
+#define ID_1_32775                      32775
+#define RE_INIT                         32776
+#define UPDATE                          32777
+#define CLOSE                           32778
+#define ID_1_32779                      32779
+#define FLOAT_SWITCH                    32781
+#define ID_32782                        32782
+#define ID_32783                        32783
 #define IDC_S6                          -1
 
 // Next default values for new objects
@@ -46,8 +64,8 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        160
-#define _APS_NEXT_COMMAND_VALUE         32773
+#define _APS_NEXT_RESOURCE_VALUE        168
+#define _APS_NEXT_COMMAND_VALUE         32784
 #define _APS_NEXT_CONTROL_VALUE         1016
 #define _APS_NEXT_SYMED_VALUE           111
 #endif

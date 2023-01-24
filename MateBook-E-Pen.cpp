@@ -1,7 +1,7 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "0.4.0"
+#define version "1.0.0"
 
 /////////////////////////////////////////////
 /////////////////           /////////////////
@@ -14,46 +14,79 @@ void init(HWND hWnd)
 	// 图标初始化(仅首次)
     if (if_init == FALSE) Tray(hWnd);
 
-	show_message(L"初始化中", L"大概需要8秒，请稍等...");
-	
-	// 第一步
-    if (isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
-    {
-		killProcess(L"HuaweiPenAPP.exe");
-    }
-	Sleep(500);
-	
-	// 第二步
+	// 首次检测前是否完成过初始化
     vector<wstring> xmlfileNames = findfiles(L"C:\\ProgramData\\Huawei\\HuaweiPenAPP\\", L"*.xml");
-    for (int i = 0; i < xmlfileNames.size(); i++)
+	int modified_count1 = 0, modified_count2 = 0;;
+    bool pre_init = false;
+    if (if_init == FALSE)
     {
-        wcout << xmlfileNames[i] << endl;
-        modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"3");
+        for (int i = 0; i < xmlfileNames.size(); i++)
+        {
+            if (read_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>").find(L"2") != wstring::npos)
+            {
+                modified_count1++;
+                Sleep(100);
+            }
+        }
+        for (int i = 0; i < xmlfileNames.size(); i++)
+        {
+            modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"2");
+        }
+        for (int i = 0; i < xmlfileNames.size(); i++)
+        {
+            if (read_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>").find(L"2") != wstring::npos)
+            {
+                modified_count2++;
+                Sleep(100);
+            }
+        }
+        if (modified_count1 == modified_count2 && isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
+        {
+            pre_init = true;
+            show_message(L"初始化中", L"大概需要4秒，请稍等...");
+        }
     }
-    Sleep(500);
 	
-	// 第三步
-    ShellExecute(NULL, _T("open"), _T("HuaweiPenAPP.exe"), NULL, _T("%programfiles%\\Huawei\\HuaweiPen"), SW_SHOW);
-    Sleep(1000);
-	
-	// 第四步
-    if (isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
+    if (if_init > 0 || !pre_init)
     {
-        killProcess(L"HuaweiPenAPP.exe");
-    }
-    Sleep(500);
+        show_message(L"初始化中", L"大概需要8秒，请稍等...");
 
-	// 第五步
-    for (int i = 0; i < xmlfileNames.size(); i++)
-    {
-        wcout << xmlfileNames[i] << endl;
-        modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"2");
-    }
-    Sleep(500);
+        // 第一步
+        if (isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
+        {
+            killProcess(L"HuaweiPenAPP.exe");
+        }
+        Sleep(500);
 
-	// 第六步
-    ShellExecute(NULL, _T("open"), _T("HuaweiPenAPP.exe"), NULL, _T("%programfiles%\\Huawei\\HuaweiPen"), SW_SHOW);
-    Sleep(1000);
+        // 第二步
+        for (int i = 0; i < xmlfileNames.size(); i++)
+        {
+            modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"3");
+        }
+        Sleep(500);
+
+        // 第三步
+        ShellExecute(NULL, _T("open"), _T("HuaweiPenAPP.exe"), NULL, _T("%programfiles%\\Huawei\\HuaweiPen"), SW_SHOW);
+        Sleep(1000);
+
+        // 第四步
+        if (isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
+        {
+            killProcess(L"HuaweiPenAPP.exe");
+        }
+        Sleep(500);
+
+        // 第五步
+        for (int i = 0; i < xmlfileNames.size(); i++)
+        {
+            modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"2");
+        }
+        Sleep(500);
+
+        // 第六步
+        ShellExecute(NULL, _T("open"), _T("HuaweiPenAPP.exe"), NULL, _T("%programfiles%\\Huawei\\HuaweiPen"), SW_SHOW);
+        Sleep(1000);
+    }
 	
     // 第七步
     SetRegValue_REG_DWORD(1, "Software\\Microsoft\\Windows\\CurrentVersion\\ClickNote\\UserCustomization\\DoubleClickBelowLock", "Override", (DWORD)1);
@@ -73,10 +106,10 @@ void init(HWND hWnd)
     show_message(L"初始化完成", L"若功能无法使用请重新初始化");
 	
     // 图标初始化(仅首次)
-    if (if_init == FALSE) Tray_Icon();
+    if (if_init == FALSE) Change_Icon();
 
     // 结束初始化
-    if_init = TRUE;
+    if_init++;
 }
 
 ///////////////////////////////////////////////
@@ -91,6 +124,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    GdiplusStartup(&m_pGdiToken, &m_gdiplusStartupInput, NULL);
 
 	switch_dark(get_if_dark());
 	
@@ -111,6 +145,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 	
 	thread tid6(ink_setting_lock);
 	tid6.detach();
+
+	thread tid7(SubFloatMotion);
+	tid7.detach();
+
+    thread tid8(SubFloatSelect);
+    tid8.detach();
 	
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_MATEBOOKEPEN, szWindowClass, MAX_LOADSTRING);
@@ -145,15 +185,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     UINT WM_TASKBARCREATED;
-    POINT pt;
+    static POINT pt;
 
     WM_TASKBARCREATED = RegisterWindowMessage(TEXT("TaskbarCreated"));
+	
+    FloatMouse(hWnd, message, wParam, lParam);
+	
     switch (message)
     {
     case WM_CREATE:
         {
-            inst_hwnd = hWnd, hwnd_popup = hWnd;
-	    	init(hWnd);
 	    	break;
         }
     case WM_SIZE:
@@ -165,7 +206,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_TRAY:
         if (lParam == WM_LBUTTONDOWN)
         {
-            Tray_Icon();
+            Change_Icon();
         }
         if (lParam == WM_LBUTTONDBLCLK)
         {
@@ -181,29 +222,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         if (lParam == WM_RBUTTONDOWN)
         {
-            GetCursorPos(&pt);
-            SetForegroundWindow(hWnd);
-            UINT clicked = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY, pt.x, pt.y, 0, hWnd, NULL);
-            SendMessage(hWnd, WM_NULL, 0, 0);
-            if (clicked == CLOSE)
-                SendMessage(hWnd, WM_CLOSE, wParam, lParam);
-            if (clicked == UPDATE)
-            {
-                if (check_update() == S_OK)
-                {
-					if (StrCmpA(update_version.c_str(), version) != 0) update(hWnd, CanUpdate);
-					else update(hWnd, UpToDate);
-                }
-				else update(hWnd, CheckUpdateFailed);
-            }
-            if (clicked == RE_INIT)
-			{
-				init(hWnd);
-			}
+            IconRightClick(hWnd, message, wParam, lParam);
         }
     break;
     case WM_DESTROY:
         Shell_NotifyIcon(NIM_DELETE, &nid);
+		GdiplusShutdown(m_pGdiToken);
         PostQuitMessage(0);
         break;
     default:
@@ -233,7 +257,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         if (LOWORD(wParam) == IDC_WnE)
         {
             state = IDI_UNDO;
-            Tray_Icon();
+            Change_Icon();
             SetDlgItemText(hDlg, IDC_MODE, L"笔/橡皮模式");
             SetTimer(hDlg, 1, 3000, NULL);
             return (INT_PTR)TRUE;
@@ -241,7 +265,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         if (LOWORD(wParam) == IDC_SCREENSHOT)
         {
             state = IDI_WnE;
-            Tray_Icon();
+            Change_Icon();
 			SetDlgItemText(hDlg, IDC_MODE, L"截图模式");
             SetTimer(hDlg, 1, 3000, NULL);
             return (INT_PTR)TRUE;
@@ -249,7 +273,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         if (LOWORD(wParam) == IDC_NOTE)
         {
             state = IDI_SCREENSHOT;
-            Tray_Icon();
+            Change_Icon();
             SetDlgItemText(hDlg, IDC_MODE, L"批注模式");
             SetTimer(hDlg, 1, 3000, NULL);
             return (INT_PTR)TRUE;
@@ -257,7 +281,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         if (LOWORD(wParam) == IDC_COPY)
         {
             state = IDI_NOTE;
-            Tray_Icon();
+            Change_Icon();
 			SetDlgItemText(hDlg, IDC_MODE, L"复制模式");
             SetTimer(hDlg, 1, 3000, NULL);
             return (INT_PTR)TRUE;
@@ -265,7 +289,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         if (LOWORD(wParam) == IDC_PASTE)
         {
             state = IDI_COPY;
-            Tray_Icon();
+            Change_Icon();
 			SetDlgItemText(hDlg, IDC_MODE, L"粘贴模式");
             SetTimer(hDlg, 1, 3000, NULL);
             return (INT_PTR)TRUE;
@@ -273,7 +297,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         if (LOWORD(wParam) == IDC_UNDO)
         {
             state = IDI_PASTE;
-            Tray_Icon();
+            Change_Icon();
 			SetDlgItemText(hDlg, IDC_MODE, L"撤销模式");
             SetTimer(hDlg, 1, 3000, NULL);
             return (INT_PTR)TRUE;
@@ -316,7 +340,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 {
     WNDCLASSEXW wcex;
     wcex.cbSize = sizeof(WNDCLASSEX);
-    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC | CS_NOCLOSE;
     wcex.lpfnWndProc = WndProc;
     wcex.cbClsExtra = 0;
     wcex.cbWndExtra = 0;
@@ -333,15 +357,44 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
     hInst = hInstance;
+	
+    int OSDleft = GetSystemMetrics(SM_CXSCREEN) / 2 + 700;
+    int OSDTop = 5 * GetSystemMetrics(SM_CYSCREEN) / 8;
+	
+    idb_MAIN = LoadImageFromResource(hInstance, MAKEINTRESOURCE(IDB_MAIN), L"PNG");
+    idb_WnE = LoadImageFromResource(hInstance, MAKEINTRESOURCE(IDB_WnE), L"PNG");
+    idb_SCREENSHOT = LoadImageFromResource(hInstance, MAKEINTRESOURCE(IDB_SCREENSHOT), L"PNG");
+    idb_NOTE = LoadImageFromResource(hInstance, MAKEINTRESOURCE(IDB_NOTE), L"PNG");
+    idb_COPY = LoadImageFromResource(hInstance, MAKEINTRESOURCE(IDB_COPY), L"PNG");
+    idb_PASTE = LoadImageFromResource(hInstance, MAKEINTRESOURCE(IDB_PASTE), L"PNG");
+    idb_UNDO = LoadImageFromResource(hInstance, MAKEINTRESOURCE(IDB_UNDO), L"PNG");
+	
+    HWND hWnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        szWindowClass,  szTitle, WS_VISIBLE | WS_POPUP, OSDleft, OSDTop, 100, 100,
+        nullptr, nullptr, hInstance, nullptr);
+    inst_hwnd = hWnd, hwnd_popup = hWnd;
+    init(hWnd);
 
-    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
-
+    WnE = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        szWindowClass, szTitle, WS_VISIBLE | WS_POPUP, OSDleft - 300, OSDTop - 300, 0, 0,
+        nullptr, nullptr, hInstance, nullptr);
+    SCREENSHOT = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        szWindowClass, szTitle, WS_VISIBLE | WS_POPUP, OSDleft - 300, OSDTop - 160, 0, 0,
+        nullptr, nullptr, hInstance, nullptr);
+    NOTE = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        szWindowClass, szTitle, WS_VISIBLE | WS_POPUP, OSDleft - 300, OSDTop - 20, 0, 0,
+        nullptr, nullptr, hInstance, nullptr);
+    COPY = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        szWindowClass, szTitle, WS_VISIBLE | WS_POPUP, OSDleft - 300, OSDTop + 120, 0, 0,
+        nullptr, nullptr, hInstance, nullptr);
+    PASTE = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        szWindowClass, szTitle, WS_VISIBLE | WS_POPUP, OSDleft - 300, OSDTop + 260, 0, 0,
+        nullptr, nullptr, hInstance, nullptr);
+    UNDO = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+        szWindowClass, szTitle, WS_VISIBLE | WS_POPUP, OSDleft - 300, OSDTop + 400, 0, 0,
+        nullptr, nullptr, hInstance, nullptr);
+	
     if (!hWnd) return FALSE;
-
-    ShowWindow(hWnd, SW_HIDE);
-    UpdateWindow(hWnd);
-
     return TRUE;
 }
 
@@ -356,10 +409,7 @@ void Tray(HWND hWnd)
     state = IDI_MAIN;
     wcscpy_s(nid.szTip, _T("MateBook E Pen"));
     Shell_NotifyIcon(NIM_ADD, &nid);
-    hMenu = CreatePopupMenu();
-    AppendMenu(hMenu, MF_STRING, RE_INIT, _T("重新初始化"));
-    AppendMenu(hMenu, MF_STRING, UPDATE, _T("检查更新"));
-	AppendMenu(hMenu, MF_STRING, CLOSE, _T("退出"));
+    hMenu = GetSubMenu(LoadMenu(hInst, MAKEINTRESOURCE(IDR_MENU1)), 0);
 }
 
 void show_message(const wchar_t* title, const wchar_t* message)
@@ -372,108 +422,829 @@ void show_message(const wchar_t* title, const wchar_t* message)
 	wcscpy_s(nid.szInfo, L"");
 }
 
-void Tray_Icon()
+void Change_Icon()
 {
     switch (state)
     {
-	case IDI_MAIN:
-    {
-        DestroyIcon(nid.hIcon);
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
-        state = IDI_WnE;
-        Shell_NotifyIcon(NIM_MODIFY, &nid);
-        if_used = 0;
-        break;
-    }
-	case IDI_WnE:
-    {
-        DestroyIcon(nid.hIcon);
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_SCREENSHOT));
-        state = IDI_SCREENSHOT;
-        Shell_NotifyIcon(NIM_MODIFY, &nid);
-        if_used = 0;
-        switch_back = TRUE;
-        break;
-    }
-	case IDI_SCREENSHOT:
-    {
-        DestroyIcon(nid.hIcon);
-        if (if_used == 0)
+    case IDI_MAIN:
         {
-            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_NOTE));
-            state = IDI_NOTE;
+            DestroyIcon(nid.hIcon);
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
+            state = IDI_WnE;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
+            if (float_mode == TRUE) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
+            if_used = 0;
+            break;
         }
-		else
-		{
-			nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
-			state = IDI_PASTE;
-			Shell_NotifyIcon(NIM_MODIFY, &nid);
-		}
-        if_used = 0;
-        switch_back = TRUE;
-        break;
-    }
+    case IDI_WnE:
+        {
+            DestroyIcon(nid.hIcon);
+            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_SCREENSHOT));
+            state = IDI_SCREENSHOT;
+            Shell_NotifyIcon(NIM_MODIFY, &nid);
+            if (float_mode == TRUE) UpdateFloat(idb_SCREENSHOT, inst_hwnd, 0, 0);
+            if_used = 0;
+            switch_back = TRUE;
+            break;
+        }
+    case IDI_SCREENSHOT:
+        {
+            DestroyIcon(nid.hIcon);
+            if (if_used == 0)
+            {
+                nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_NOTE));
+                state = IDI_NOTE;
+                Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_NOTE, inst_hwnd, 0, 0);
+            }
+            else
+            {
+                nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
+                state = IDI_PASTE;
+                Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
+            }
+            if_used = 0;
+            switch_back = TRUE;
+            break;
+        }
     case IDI_NOTE:
-    {
-        DestroyIcon(nid.hIcon);
-        if (if_used == 0)
         {
-            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
-            state = IDI_COPY;
-            Shell_NotifyIcon(NIM_MODIFY, &nid);
+            DestroyIcon(nid.hIcon);
+            if (if_used == 0)
+            {
+                nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
+                state = IDI_COPY;
+                Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_COPY, inst_hwnd, 0, 0);
+            }
+            else
+            {
+                nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
+                state = IDI_PASTE;
+                Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
+            }
+            if_used = 0;
+            switch_back = TRUE;
+            break;
         }
-        else
+    case IDI_COPY:
         {
+            DestroyIcon(nid.hIcon);
             nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
             state = IDI_PASTE;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
+            if (float_mode == TRUE) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
+            if_used = 0;
+            switch_back = TRUE;
+            break;
         }
-        if_used = 0;
-        switch_back = TRUE;
-        break;
-    }
-	case IDI_COPY:
-    {
-        DestroyIcon(nid.hIcon);
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
-        state = IDI_PASTE;
-        Shell_NotifyIcon(NIM_MODIFY, &nid);
-        if_used = 0;
-        switch_back = TRUE;
-        break;
-    }
-	case IDI_PASTE:
-    {
-        DestroyIcon(nid.hIcon);
-        if (if_used == 0)
+    case IDI_PASTE:
         {
-            nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_UNDO));
-            state = IDI_UNDO;
-            Shell_NotifyIcon(NIM_MODIFY, &nid);
+            DestroyIcon(nid.hIcon);
+            if (if_used == 0)
+            {
+                nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_UNDO));
+                state = IDI_UNDO;
+                Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_UNDO, inst_hwnd, 0, 0);
+            }
+            else if (default_mode == 1)
+            {
+                nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
+                state = IDI_WnE;
+                Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
+            }
+            else if (default_mode == 2)
+            {
+                nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_SCREENSHOT));
+                state = IDI_SCREENSHOT;
+                Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_SCREENSHOT, inst_hwnd, 0, 0);
+            }
+			else if (default_mode == 3)
+			{
+				nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_NOTE));
+				state = IDI_NOTE;
+				Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_NOTE, inst_hwnd, 0, 0);
+			}
+			else if (default_mode == 4)
+			{
+				nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
+				state = IDI_COPY;
+				Shell_NotifyIcon(NIM_MODIFY, &nid);
+                if (float_mode == TRUE) UpdateFloat(idb_COPY, inst_hwnd, 0, 0);
+			}
+			else if (default_mode == 5)
+			{
+				nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_UNDO));
+				state = IDI_UNDO;
+				Shell_NotifyIcon(NIM_MODIFY, &nid);
+				if (float_mode == TRUE) UpdateFloat(idb_UNDO, inst_hwnd, 0, 0);
+            }
+            if_used = 0;
+            switch_back = TRUE;
+            break;
         }
-        else
+    case IDI_UNDO:
         {
             nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
             state = IDI_WnE;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
+            if (float_mode == TRUE) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
+            if_used = 0;
+            switch_back = TRUE;
+            break;
         }
-        if_used = 0;
-        switch_back = TRUE;
-        break;
-    }
-	case IDI_UNDO:
-    {
-        nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
-        state = IDI_WnE;
-        Shell_NotifyIcon(NIM_MODIFY, &nid);
-        if_used = 0;
-        switch_back = TRUE;
-        break;
-    }
     default:
         break;
     }
+}
+
+// 更新悬浮球显示内容
+BOOL UpdateFloat(Image* image, HWND hwnd, int Width, int Height)
+{
+    BLENDFUNCTION m_Blend;
+    m_Blend.BlendOp = AC_SRC_OVER;
+    m_Blend.BlendFlags = 0;
+    m_Blend.AlphaFormat = AC_SRC_ALPHA;
+    m_Blend.SourceConstantAlpha = 255;
+
+    int nWidth = 1, nHeight = 1;
+    SIZE sizeWindow{ 1, 1 };
+	
+	if (image != nullptr && Width == 0 && Height == 0)
+    {
+        nWidth = image->GetWidth();
+        nHeight = image->GetHeight();
+        sizeWindow = { nWidth, nHeight };
+    }
+    else if (image != nullptr && Width != 0 && Height != 0)
+    {
+        nWidth = Width;
+        nHeight = Height;
+        sizeWindow = { nWidth, nHeight };
+    }
+
+    HDC m_hDC = ::GetDC(hwnd);
+    HDC m_hdcMemory = CreateCompatibleDC(m_hDC);
+    HBITMAP hBitMap = CreateCompatibleBitmap(m_hDC, nWidth, nHeight);
+    SelectObject(m_hdcMemory, hBitMap);
+
+    Gdiplus::Graphics graph(m_hdcMemory);
+
+    POINT ptSrc = { 0, 0 };
+
+    graph.SetSmoothingMode(SmoothingModeAntiAlias);
+
+	if (image != nullptr)
+	{
+		graph.DrawImage(image, 0, 0, nWidth, nHeight);
+	}
+
+    BOOL bRet = FALSE;
+    bRet = ::UpdateLayeredWindow(hwnd, m_hDC, NULL, &sizeWindow, m_hdcMemory, &ptSrc, 0, &m_Blend, ULW_ALPHA);
+
+    graph.ReleaseHDC(m_hdcMemory);
+    ::ReleaseDC(hwnd, m_hDC);
+    m_hDC = NULL;
+    DeleteObject(hBitMap);
+    DeleteDC(m_hdcMemory);
+    m_hdcMemory = NULL;
+    return bRet;
+}
+
+// 从资源文件中加载图片
+Bitmap* LoadImageFromResource(HMODULE hMod, const wchar_t* resid, const wchar_t* restype)
+{
+    IStream* pStream = nullptr;
+    Gdiplus::Bitmap* pBmp = nullptr;
+    HGLOBAL hGlobal = nullptr;
+    HRSRC hrsrc = FindResourceW(hInst, resid, restype);
+    if (hrsrc)
+    {
+        DWORD dwResourceSize = SizeofResource(hMod, hrsrc);
+        if (dwResourceSize > 0)
+        {
+            HGLOBAL hGlobalResource = LoadResource(hMod, hrsrc);
+            if (hGlobalResource)
+            {
+                void* imagebytes = LockResource(hGlobalResource);
+                hGlobal = ::GlobalAlloc(GHND, dwResourceSize);
+                if (hGlobal)
+                {
+                    void* pBuffer = ::GlobalLock(hGlobal);
+                    if (pBuffer)
+                    {
+                        memcpy(pBuffer, imagebytes, dwResourceSize);
+                        HRESULT hr = CreateStreamOnHGlobal(hGlobal, TRUE, &pStream);
+                        if (SUCCEEDED(hr))
+                        {
+                            hGlobal = nullptr;
+                            pBmp = new Gdiplus::Bitmap(pStream);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (pStream)
+    {
+        pStream->Release();
+        pStream = nullptr;
+    }
+    if (hGlobal)
+    {
+        GlobalFree(hGlobal);
+    }
+    return pBmp;
+}
+
+// 悬浮球鼠标控制
+void FloatMouse(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_LBUTTONDOWN:
+    {
+        SetCapture(hWnd);
+        posMouseClick.x = LOWORD(lParam);
+        posMouseClick.y = HIWORD(lParam);
+        ClickFloatState = LBUTTONDOWN;
+        FloatSelectState = LBUTTONDOWN;
+        break;
+    }
+    case WM_LBUTTONUP:
+    {
+        ClickFloatState = LBUTTONUP;
+		FloatSelectState = LBUTTONUP;
+        ReleaseCapture();
+        break;
+    }
+    case WM_MOUSEMOVE:
+        if (GetCapture() == hWnd)
+        {
+            if (SubFloatSelecting == NOSELECTING)
+            {
+                RECT rWindow;
+                GetWindowRect(hWnd, &rWindow);
+                SetWindowPos(hWnd, NULL, rWindow.left + (short)LOWORD(lParam) - posMouseClick.x,
+                    rWindow.top + (short)HIWORD(lParam) - posMouseClick.y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+            }
+        }
+        break;
+    case WM_RBUTTONDOWN:
+        {
+            IconRightClick(hWnd, message, wParam, lParam);
+            break;
+        }
+    }
+}
+
+// 悬浮球及图标右键处理
+void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	POINT pt;
+    GetCursorPos(&pt);
+    SetForegroundWindow(hWnd);
+    UINT clicked = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_NONOTIFY, pt.x, pt.y, 0, hWnd, NULL);
+    SendMessage(hWnd, WM_NULL, 0, 0);
+    if (clicked == CLOSE)
+        SendMessage(hWnd, WM_CLOSE, wParam, lParam);
+    if (clicked == UPDATE)
+    {
+        if (check_update() == S_OK)
+        {
+            if (StrCmpA(update_version.c_str(), version) != 0) update(hWnd, CanUpdate);
+            else update(hWnd, UpToDate);
+        }
+        else update(hWnd, CheckUpdateFailed);
+    }
+    if (clicked == RE_INIT)
+    {
+        init(hWnd);
+    }
+    if (clicked == FLOAT_SWITCH)
+    {
+        if (float_mode == FALSE)
+        {
+            CheckMenuItem(hMenu, FLOAT_SWITCH, MF_CHECKED);
+            float_mode = TRUE;
+            switch (state)
+            {
+            case IDI_WnE:
+                state = IDI_UNDO;
+                break;
+            case IDI_SCREENSHOT:
+                state = IDI_WnE;
+                break;
+            case IDI_NOTE:
+                state = IDI_SCREENSHOT;
+                break;
+            case IDI_COPY:
+                state = IDI_NOTE;
+                break;
+            case IDI_PASTE:
+                state = IDI_COPY;
+                break;
+            case IDI_UNDO:
+                state = IDI_PASTE;
+                break;
+            }
+            Change_Icon();
+        }
+		else
+		{
+			CheckMenuItem(hMenu, FLOAT_SWITCH, MF_UNCHECKED);
+            float_mode = FALSE;
+			UpdateFloat(nullptr, inst_hwnd, 0, 0);
+		}
+    }
+	if (clicked == ID_1_32773)
+	{
+        CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32775, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32779, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32773, MF_CHECKED);
+        default_mode = 1;
+	}
+    if (clicked == ID_1_32774)
+    {
+        CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32775, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32779, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32774, MF_CHECKED);
+        default_mode = 2;
+    }
+    if (clicked == ID_1_32775)
+    {
+        CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32775, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32779, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32775, MF_CHECKED);
+		default_mode = 3;
+    }
+    if (clicked == ID_1_32779)
+    {
+        CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32775, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32779, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32779, MF_CHECKED);
+		default_mode = 4;
+    }
+    if (clicked == ID_32783)
+    {
+        CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32775, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32779, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32783, MF_CHECKED);
+        default_mode = 5;
+    }
+	if (clicked == ID_32782)
+	{
+        CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32775, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_1_32779, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
+        CheckMenuItem(hMenu, ID_32782, MF_CHECKED);
+        default_mode = 0;
+	}
+}
+
+// 子悬浮球动画
+void* SubFloatMotion()
+{
+	RECT MAIN, WnE1, SCREENSHOT1, NOTE1, COPY1, PASTE1, UNDO1, WINDOW;
+    LONG x1, y1_, x2, y_WnE, y_SCREENSHOT, y_NOTE, y_COPY, y_PASTE, y_UNDO,
+        y1_WnE, y1_SCREENSHOT, y1_NOTE, y1_COPY, y1_PASTE, y1_UNDO;
+    int X, Y_WnE, Y_SCREENSHOT, Y_NOTE, Y_COPY, Y_PASTE, Y_UNDO;
+    int speed_control = 100;
+    BOOL redown = FALSE;
+
+    while (1)
+    {
+        if (ClickFloatState == LBUTTONDOWN)
+        {
+            GetWindowRect(WnE, &WnE1);
+            if (WnE1.top == MAIN.top - 300) ClickFloatState = 0;
+        }
+        if (ClickFloatState == LBUTTONUP)
+        {
+            GetWindowRect(WnE, &WnE1);
+            GetWindowRect(inst_hwnd, &MAIN);
+            if (WnE1.top == MAIN.top + 17)
+            {
+                UpdateFloat(nullptr, WnE, 0, 0);
+                UpdateFloat(nullptr, SCREENSHOT, 0, 0);
+                UpdateFloat(nullptr, NOTE, 0, 0);
+                UpdateFloat(nullptr, COPY, 0, 0);
+                UpdateFloat(nullptr, PASTE, 0, 0);
+                UpdateFloat(nullptr, UNDO, 0, 0);
+                ClickFloatState = 0;
+            }
+        }
+		
+        switch (ClickFloatState)
+        {
+        case LBUTTONDOWN:
+        {
+			GetWindowRect(inst_hwnd, &MAIN);
+            GetWindowRect(GetDesktopWindow(), &WINDOW);
+
+            if (MAIN.left + 70 > WINDOW.right/2)
+            {
+                x2 = MAIN.left - 300;
+            }
+            else
+            {
+                x2 = MAIN.left + 300;
+            }
+            y1_ = MAIN.top + 17;
+            y_WnE = MAIN.top - 300;
+            y_SCREENSHOT = MAIN.top - 160;
+            y_NOTE = MAIN.top - 20;
+            y_COPY = MAIN.top + 120;
+            y_PASTE = MAIN.top + 260;
+            y_UNDO = MAIN.top + 400;
+
+            if (redown == FALSE)
+            {
+                x1 = MAIN.left + 17;
+                SetWindowPos(WnE, HWND_NOTOPMOST, MAIN.left + 17, MAIN.top + 17, 0, 0, SWP_NOSIZE);
+                SetWindowPos(SCREENSHOT, HWND_NOTOPMOST, MAIN.left + 17, MAIN.top + 17, 0, 0, SWP_NOSIZE);
+                SetWindowPos(NOTE, HWND_NOTOPMOST, MAIN.left + 17, MAIN.top + 17, 0, 0, SWP_NOSIZE);
+                SetWindowPos(COPY, HWND_NOTOPMOST, MAIN.left + 17, MAIN.top + 17, 0, 0, SWP_NOSIZE);
+                SetWindowPos(PASTE, HWND_NOTOPMOST, MAIN.left + 17, MAIN.top + 17, 0, 0, SWP_NOSIZE);
+                SetWindowPos(UNDO, HWND_NOTOPMOST, MAIN.left + 17, MAIN.top + 17, 0, 0, SWP_NOSIZE);
+            }
+			
+            UpdateFloat(idb_WnE, WnE, 100, 100);
+            UpdateFloat(idb_SCREENSHOT, SCREENSHOT, 100, 100);
+            UpdateFloat(idb_NOTE, NOTE, 100, 100);
+            UpdateFloat(idb_COPY, COPY, 100, 100);
+            UpdateFloat(idb_PASTE, PASTE, 100, 100);
+            UpdateFloat(idb_UNDO, UNDO, 100, 100);
+
+            for (int i = 0; i <= speed_control; i++)
+            {
+                if (ClickFloatState == LBUTTONUP)
+                {
+                    GetWindowRect(WnE, &WnE1);
+                    GetWindowRect(SCREENSHOT, &SCREENSHOT1);
+                    GetWindowRect(NOTE, &NOTE1);
+                    GetWindowRect(COPY, &COPY1);
+                    GetWindowRect(PASTE, &PASTE1);
+                    GetWindowRect(UNDO, &UNDO1);
+                    x2 = WnE1.left;
+                    y_WnE = WnE1.top;
+                    y_SCREENSHOT = SCREENSHOT1.top;
+                    y_NOTE = NOTE1.top;
+                    y_COPY = COPY1.top;
+                    y_PASTE = PASTE1.top;
+                    y_UNDO = UNDO1.top;
+					break;
+                }
+                if (redown == FALSE)
+                {
+                    X = x1 + (x2 - x1) * i / speed_control;
+                    Y_WnE = y1_ + (y_WnE - y1_) * i / speed_control;
+                    Y_SCREENSHOT = y1_ + (y_SCREENSHOT - y1_) * i / speed_control;
+                    Y_NOTE = y1_ + (y_NOTE - y1_) * i / speed_control;
+                    Y_COPY = y1_ + (y_COPY - y1_) * i / speed_control;
+                    Y_PASTE = y1_ + (y_PASTE - y1_) * i / speed_control;
+                    Y_UNDO = y1_ + (y_UNDO - y1_) * i / speed_control;
+                }
+                else
+                {
+                    X = x1 + (x2 - x1) * i / speed_control;
+                    Y_WnE = y1_WnE + (y_WnE - y1_WnE) * i / speed_control;
+                    Y_SCREENSHOT = y1_SCREENSHOT + (y_SCREENSHOT - y1_SCREENSHOT) * i / speed_control;
+                    Y_NOTE = y1_NOTE + (y_NOTE - y1_NOTE) * i / speed_control;
+                    Y_COPY = y1_COPY + (y_COPY - y1_COPY) * i / speed_control;
+                    Y_PASTE = y1_PASTE + (y_PASTE - y1_PASTE) * i / speed_control;
+                    Y_UNDO = y1_UNDO + (y_UNDO - y1_UNDO) * i / speed_control;
+                }
+
+                SetWindowPos(WnE, NULL, X, Y_WnE, 0, 0, SWP_NOSIZE);
+                SetWindowPos(SCREENSHOT, NULL, X, Y_SCREENSHOT, 0, 0, SWP_NOSIZE);
+                SetWindowPos(NOTE, NULL, X, Y_NOTE, 0, 0, SWP_NOSIZE);
+                SetWindowPos(COPY, NULL, X, Y_COPY, 0, 0, SWP_NOSIZE);
+                SetWindowPos(PASTE, NULL, X, Y_PASTE, 0, 0, SWP_NOSIZE);
+                SetWindowPos(UNDO, NULL, X, Y_UNDO, 0, 0, SWP_NOSIZE);
+                redown = FALSE;
+            }
+        }
+        break;
+        case LBUTTONUP:
+        {
+            GetWindowRect(inst_hwnd, &MAIN);
+			
+            x1 = MAIN.left + 17;
+            y1_ = MAIN.top + 17;
+
+            for (int i = 0; i <= speed_control; i++)
+            {
+                if (ClickFloatState == LBUTTONDOWN)
+                {
+                    GetWindowRect(WnE, &WnE1);
+                    GetWindowRect(SCREENSHOT, &SCREENSHOT1);
+                    GetWindowRect(NOTE, &NOTE1);
+                    GetWindowRect(COPY, &COPY1);
+                    GetWindowRect(PASTE, &PASTE1);
+                    GetWindowRect(UNDO, &UNDO1);
+                    x1 = WnE1.left;
+                    y1_WnE = WnE1.top;
+                    y1_SCREENSHOT = SCREENSHOT1.top;
+                    y1_NOTE = NOTE1.top;
+                    y1_COPY = COPY1.top;
+                    y1_PASTE = PASTE1.top;
+                    y1_UNDO = UNDO1.top;
+                    redown = TRUE;
+                    break;
+                }
+                int X = x2 + (x1 - x2) * i / speed_control;
+                int Y_WnE = y_WnE + (y1_ - y_WnE) * i / speed_control;
+                int Y_SCREENSHOT = y_SCREENSHOT + (y1_ - y_SCREENSHOT) * i / speed_control;
+                int Y_NOTE = y_NOTE + (y1_ - y_NOTE) * i / speed_control;
+                int Y_COPY = y_COPY + (y1_ - y_COPY) * i / speed_control;
+                int Y_PASTE = y_PASTE + (y1_ - y_PASTE) * i / speed_control;
+                int Y_UNDO = y_UNDO + (y1_ - y_UNDO) * i / speed_control;
+
+                SetWindowPos(WnE, NULL, X, Y_WnE, 0, 0, SWP_NOSIZE);
+                SetWindowPos(SCREENSHOT, NULL, X, Y_SCREENSHOT, 0, 0, SWP_NOSIZE);
+                SetWindowPos(NOTE, NULL, X, Y_NOTE, 0, 0, SWP_NOSIZE);
+                SetWindowPos(COPY, NULL, X, Y_COPY, 0, 0, SWP_NOSIZE);
+                SetWindowPos(PASTE, NULL, X, Y_PASTE, 0, 0, SWP_NOSIZE);
+                SetWindowPos(UNDO, NULL, X, Y_UNDO, 0, 0, SWP_NOSIZE);
+            }
+        }
+        break;
+        }
+        Sleep(1);
+    }
+}
+
+// 子悬浮球选择
+void* SubFloatSelect()
+{
+    RECT WINDOW, MAIN_RECT;
+	POINT cursorPos, MAIN, WnE1, SCREENSHOT1, NOTE1, COPY1, PASTE1, UNDO1, bottom;
+	bool init = false, notout = true, trace_cursor = true;
+    int select = 0;
+    while (1)
+    {
+        switch (FloatSelectState)
+        {
+        case LBUTTONDOWN:
+            {
+                if (init == false)
+                {
+                    GetWindowRect(inst_hwnd, &MAIN_RECT);
+                    GetWindowRect(GetDesktopWindow(), &WINDOW);
+                    MAIN.y = MAIN_RECT.top + 70;
+                    if (MAIN_RECT.left + 70 > WINDOW.right / 2)
+                    {
+                        MAIN.x = MAIN_RECT.left + 140;
+                        WnE1.x = MAIN_RECT.left - 300;
+                        SCREENSHOT1.x = MAIN_RECT.left - 300;
+                        NOTE1.x = MAIN_RECT.left - 300;
+                        COPY1.x = MAIN_RECT.left - 300;
+                        PASTE1.x = MAIN_RECT.left - 300;
+                        UNDO1.x = MAIN_RECT.left - 300;
+                        bottom.x = MAIN_RECT.left - 300;
+                    }
+                    else
+                    {
+                        MAIN.x = MAIN_RECT.left;
+                        WnE1.x = MAIN_RECT.left + 400;
+                        SCREENSHOT1.x = MAIN_RECT.left + 400;
+                        NOTE1.x = MAIN_RECT.left + 400;
+                        COPY1.x = MAIN_RECT.left + 400;
+                        PASTE1.x = MAIN_RECT.left + 400;
+                        UNDO1.x = MAIN_RECT.left + 400;
+                        bottom.x = MAIN_RECT.left + 400;
+                    }
+                    WnE1.y = MAIN_RECT.top - 300 - 100;
+                    SCREENSHOT1.y = MAIN_RECT.top - 160 - 20;
+                    NOTE1.y = MAIN_RECT.top - 20 - 20;
+                    COPY1.y = MAIN_RECT.top + 120 - 20;
+                    PASTE1.y = MAIN_RECT.top + 260 - 20;
+                    UNDO1.y = MAIN_RECT.top + 400 - 20;
+                    bottom.y = MAIN_RECT.top + 400 + 140 + 130;
+				    init = true;
+                }
+
+                GetCursorPos(&cursorPos);
+
+                if (cursorPos.x >= MAIN_RECT.left && cursorPos.x <= MAIN_RECT.left + 140 && cursorPos.y >= MAIN_RECT.top && cursorPos.y <= MAIN_RECT.top + 140 && notout == true)
+                {
+                    SubFloatSelecting = NOTOUT;
+                }
+                else
+                {
+                    notout = false;
+                    if (IsCursorInTriangle(cursorPos, MAIN, WnE1, bottom))
+                    {
+                        SubFloatSelecting = SELECTING;
+                    }
+                    else
+                    {
+                        ClickFloatState = LBUTTONUP;
+                        SubFloatSelecting = 0;
+                        FloatSelectState = NOSELECTING;
+						break;
+                    }
+                }
+
+                if (!notout)
+                {
+                    if (IsCursorInTriangle(cursorPos, MAIN, WnE1, SCREENSHOT1))
+                    {
+                        UpdateFloat(idb_WnE, WnE, 0, 0);
+                        UpdateFloat(idb_SCREENSHOT, SCREENSHOT, 100, 100);
+                        UpdateFloat(idb_NOTE, NOTE, 100, 100);
+                        UpdateFloat(idb_COPY, COPY, 100, 100);
+                        UpdateFloat(idb_PASTE, PASTE, 100, 100);
+                        UpdateFloat(idb_UNDO, UNDO, 100, 100);
+                        select = 1;
+                    }
+                    if (IsCursorInTriangle(cursorPos, MAIN, SCREENSHOT1, NOTE1))
+                    {
+                        UpdateFloat(idb_WnE, WnE, 100, 100);
+                        UpdateFloat(idb_SCREENSHOT, SCREENSHOT, 0, 0);
+                        UpdateFloat(idb_NOTE, NOTE, 100, 100);
+                        UpdateFloat(idb_COPY, COPY, 100, 100);
+                        UpdateFloat(idb_PASTE, PASTE, 100, 100);
+                        UpdateFloat(idb_UNDO, UNDO, 100, 100);
+                        select = 2;
+                    }
+                    if (IsCursorInTriangle(cursorPos, MAIN, NOTE1, COPY1))
+                    {
+                        UpdateFloat(idb_WnE, WnE, 100, 100);
+                        UpdateFloat(idb_SCREENSHOT, SCREENSHOT, 100, 100);
+                        UpdateFloat(idb_NOTE, NOTE, 0, 0);
+                        UpdateFloat(idb_COPY, COPY, 100, 100);
+                        UpdateFloat(idb_PASTE, PASTE, 100, 100);
+                        UpdateFloat(idb_UNDO, UNDO, 100, 100);
+                        select = 3;
+                    }
+                    if (IsCursorInTriangle(cursorPos, MAIN, COPY1, PASTE1))
+                    {
+                        UpdateFloat(idb_WnE, WnE, 100, 100);
+                        UpdateFloat(idb_SCREENSHOT, SCREENSHOT, 100, 100);
+                        UpdateFloat(idb_NOTE, NOTE, 100, 100);
+                        UpdateFloat(idb_COPY, COPY, 0, 0);
+                        UpdateFloat(idb_PASTE, PASTE, 100, 100);
+                        UpdateFloat(idb_UNDO, UNDO, 100, 100);
+                        select = 4;
+                    }
+                    if (IsCursorInTriangle(cursorPos, MAIN, PASTE1, UNDO1))
+                    {
+                        UpdateFloat(idb_WnE, WnE, 100, 100);
+                        UpdateFloat(idb_SCREENSHOT, SCREENSHOT, 100, 100);
+                        UpdateFloat(idb_NOTE, NOTE, 100, 100);
+                        UpdateFloat(idb_COPY, COPY, 100, 100);
+                        UpdateFloat(idb_PASTE, PASTE, 0, 0);
+                        UpdateFloat(idb_UNDO, UNDO, 100, 100);
+                        select = 5;
+                    }
+                    if (IsCursorInTriangle(cursorPos, MAIN, UNDO1, bottom))
+                    {
+                        UpdateFloat(idb_WnE, WnE, 100, 100);
+                        UpdateFloat(idb_SCREENSHOT, SCREENSHOT, 100, 100);
+                        UpdateFloat(idb_NOTE, NOTE, 100, 100);
+                        UpdateFloat(idb_COPY, COPY, 100, 100);
+                        UpdateFloat(idb_PASTE, PASTE, 100, 100);
+                        UpdateFloat(idb_UNDO, UNDO, 0, 0);
+                        select = 6;
+                    }
+                }
+			    break;
+            }
+		case LBUTTONUP:
+		    {
+			    init = false;
+                if (SubFloatSelecting != NOSELECTING)
+                {
+                    switch (select)
+                    {
+                    case 1:
+                        state = IDI_UNDO;
+                        break;
+                    case 2:
+                        state = IDI_WnE;
+                        break;
+                    case 3:
+                        state = IDI_SCREENSHOT;
+                        break;
+                    case 4:
+                        state = IDI_NOTE;
+                        break;
+                    case 5:
+                        state = IDI_COPY;
+                        break;
+                    case 6:
+                        state = IDI_PASTE;
+                        break;
+                    }
+                    Change_Icon();
+                }
+                select = 0;
+                notout = true;
+                trace_cursor = true;
+                SubFloatSelecting = 0;
+				FloatSelectState = 0;
+			    break;
+		    }
+        case NOSELECTING:
+		    {
+                if (ClickFloatState == 0)
+                {
+                    FloatSelectState = 0;
+                    while (trace_cursor)
+                    {
+                        GetCursorPos(&cursorPos);
+                        GetWindowRect(inst_hwnd, &MAIN_RECT);
+						if (MAIN_RECT.left + posMouseClick.x == cursorPos.x && MAIN_RECT.top + posMouseClick.y == cursorPos.y)
+						{
+                            trace_cursor = false;
+                            break;
+						}
+                        int distance;
+                        if (cursorPos.x >= MAIN_RECT.left && cursorPos.x <= MAIN_RECT.left + 140 && cursorPos.y >= MAIN_RECT.top && cursorPos.y <= MAIN_RECT.top + 140)
+                        {
+                            distance = 10;
+                        }
+						else
+						{
+							distance = 150;
+						}
+						cursorPos.x = cursorPos.x - posMouseClick.x;
+						cursorPos.y = cursorPos.y - posMouseClick.y;
+                        for (int i = 0; i <= 10; i++)
+                        {
+                            int x = MAIN_RECT.left + (cursorPos.x - MAIN_RECT.left) * i / distance;
+                            int y = MAIN_RECT.top + (cursorPos.y - MAIN_RECT.top) * i / distance;
+                            SetWindowPos(inst_hwnd, NULL, x, y, 0, 0, SWP_NOSIZE);
+                        }
+                    }
+                    SubFloatSelecting = NOSELECTING;
+                }
+                break;
+		    }
+        default:
+            break;
+        }
+        Sleep(1);
+    }
+}
+
+// 判断鼠标是否在三角形内
+bool IsCursorInTriangle(POINT cursorPos, POINT triVertex1, POINT triVertex2, POINT triVertex3)
+{
+    // 计算三角形三条边的向量
+    POINT v0, v1, v2;
+    v0.x = triVertex3.x - triVertex1.x;
+    v0.y = triVertex3.y - triVertex1.y;
+    v1.x = triVertex2.x - triVertex1.x;
+    v1.y = triVertex2.y - triVertex1.y;
+    v2.x = cursorPos.x - triVertex1.x;
+    v2.y = cursorPos.y - triVertex1.y;
+
+    // 计算三个点积
+    float dot00 = v0.x * v0.x + v0.y * v0.y;
+    float dot01 = v0.x * v1.x + v0.y * v1.y;
+    float dot02 = v0.x * v2.x + v0.y * v2.y;
+    float dot11 = v1.x * v1.x + v1.y * v1.y;
+    float dot12 = v1.x * v2.x + v1.y * v2.y;
+
+    // 通过点积计算三角形面积
+    float invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+    float u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+    float v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+
+    // 如果 u 和 v 都大于 0 且 u + v 小于 1，那么鼠标在三角形内
+    return (u > 0) && (v > 0) && (u + v < 1);
 }
 
 ///////////////////////////////////////////////
@@ -523,7 +1294,6 @@ void* main_thread()
                 keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
                 BUTTON = FALSE;
                 if_used++;
-                Tray_Icon();
             }
             break;
         }
@@ -552,7 +1322,7 @@ void* main_thread()
                 keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
                 BUTTON = FALSE;
                 if_used++;
-                Tray_Icon();
+                Change_Icon();
             }
             break;
         }
@@ -567,7 +1337,10 @@ void* main_thread()
                 keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
                 BUTTON = FALSE;
                 if_used++;
-                Tray_Icon();
+                if (default_mode != 0)
+                {
+                    Change_Icon();
+                }
             }
             break;
         }
@@ -662,34 +1435,34 @@ HRESULT onenote(HWND hwnd_onenote)
 	
 	hwnd_child = FindWindowEx(hwnd_onenote, NULL, L"Windows.UI.Core.CoreWindow", NULL);
     hr = AccessibleObjectFromWindow(hwnd_child, OBJID_WINDOW, IID_IAccessible, (void**)&acc0);
-    acc1 = findchild(acc0, L"OneNote for Windows 10");
-    acc2 = findchild(acc1, L"NAMELESS");
-    acc0 = findchild(acc2, L"NAMELESS");
+    acc1 = findchild(acc0, L"OneNote for Windows 10", 1);
+    acc2 = findchild(acc1, L"NAMELESS", 1);
+    acc0 = findchild(acc2, L"NAMELESS", -1);
     if (acc0 == acc2)
     {
-        acc1 = findchild(acc0, L"OneNote for Windows 10");
-        acc2 = findchild(acc1, L"NAMELESS");
+        acc1 = findchild(acc0, L"OneNote for Windows 10", 1);
+        acc2 = findchild(acc1, L"NAMELESS", 1);
         acc0 = findchild_which(acc2, -1);
         acc1 = findchild_which(acc0, 4);
     }
     else
     {
-        acc1 = findchild(acc0, L"功能区");
-        acc2 = findchild(acc1, L"绘图");
-        acc0 = findchild(acc2, L"下层功能区");
+        acc1 = findchild(acc0, L"功能区", 1);
+        acc2 = findchild(acc1, L"绘图", 1);
+        acc0 = findchild(acc2, L"下层功能区", 1);
         if (acc2 == nullptr) return E_FAIL;
         //自动打开绘图功能区
         if (acc0 == acc2)
         {
             acc2->accDoDefaultAction(CComVariant(0));
             Sleep(20);
-            acc0 = findchild(acc2, L"下层功能区");
+            acc0 = findchild(acc2, L"下层功能区", 1);
         }
-        acc1 = findchild(acc0, L"笔");
+        acc1 = findchild(acc0, L"笔", 1);
     }
     //定位橡皮擦
-    acc2 = findchild(acc1, L"橡皮擦");
-    acc_eraser = findchild(acc2, L"橡皮擦");
+    acc2 = findchild(acc1, L"橡皮擦", 1);
+    acc_eraser = findchild(acc2, L"橡皮擦", 1);
     //定位第一支笔
     acc2 = findchild_which(acc1, 2);
     acc_pen = findchild_which(acc2, 1);
@@ -855,7 +1628,7 @@ void* light_or_dark()
                 state = IDI_PASTE;
                 break;
             }
-            Tray_Icon();
+            Change_Icon();
         }
     }
 }
@@ -926,9 +1699,9 @@ void* ink_setting_lock()
 /////////////////////////////////////////////////////////////
 
 // 按名称查找子元素
-CComPtr<IAccessible> findchild(CComPtr<IAccessible> acc_in, const wchar_t* name)
+CComPtr<IAccessible> findchild(CComPtr<IAccessible> acc_in, const wchar_t* name, int which)
 {
-    CComPtr<IAccessible> acc_child = nullptr;
+    vector<CComPtr<IAccessible>> acc_child;
     long childCount, returnCount, matchCount = 0;
 	if (acc_in == nullptr) return nullptr;
     HRESULT hr = acc_in->get_accChildCount(&childCount);
@@ -958,21 +1731,27 @@ CComPtr<IAccessible> findchild(CComPtr<IAccessible> acc_in, const wchar_t* name)
             wstring child_name = getname(pAccChild, CHILDID_SELF);
             if (child_name.find(name) != wstring::npos)
             {
-                acc_child = pAccChild;
+				acc_child.push_back(pAccChild);
                 matchCount++;
             }
         }
     }
 
-	// 只允许找到一个符合的子元素
-    if (matchCount == 1)
+    varChild.reset();
+    if (matchCount >= abs(which))
     {
-        varChild.reset();
-        return acc_child;
+        if (which < 0)
+        {
+            which = matchCount + which;
+        }
+        else
+        {
+            which--;
+        }
+        return acc_child[which];
     }
     else
     {
-		varChild.reset();
         return acc_in;
     }
 }
@@ -1184,6 +1963,28 @@ BOOL modify_file_text(string file_name, wstring start_str, wstring end_str, wstr
     file.close();
 
     return TRUE;
+}
+
+// 查看并返回文件中两个字符串之间的文本
+wstring read_file_text(string file_name, wstring start_str, wstring end_str)
+{
+	std::wfstream file(file_name, std::ios::in | std::ios::out);
+	if (!file.is_open()) return L"";
+
+	std::wstring content((std::istreambuf_iterator<wchar_t>(file)),
+		std::istreambuf_iterator<wchar_t>());
+
+	std::size_t start_pos = content.find(start_str);
+	if (start_pos != std::wstring::npos) {
+		std::size_t end_pos = content.find(end_str, start_pos + start_str.size());
+		if (end_pos != std::wstring::npos) {
+			return content.substr(start_pos + start_str.size(), end_pos - start_pos - start_str.size());
+		}
+	}
+
+	file.close();
+
+	return L"";
 }
 
 ///////////////////////////////////////////////

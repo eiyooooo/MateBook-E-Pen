@@ -154,18 +154,25 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="ico\copy.ico" />
+    <Image Include="ico\copy.png" />
     <Image Include="ico\copy_dark.ico" />
     <Image Include="ico\main.ico" />
+    <Image Include="ico\main.png" />
     <Image Include="ico\main_dark.ico" />
     <Image Include="ico\note.ico" />
+    <Image Include="ico\note.png" />
     <Image Include="ico\note_dark.ico" />
     <Image Include="ico\paste.ico" />
+    <Image Include="ico\paste.png" />
     <Image Include="ico\paste_dark.ico" />
     <Image Include="ico\screenshot.ico" />
+    <Image Include="ico\screenshot.png" />
     <Image Include="ico\screenshot_dark.ico" />
     <Image Include="ico\undo.ico" />
+    <Image Include="ico\undo.png" />
     <Image Include="ico\undo_dark.ico" />
     <Image Include="ico\W&amp;E.ico" />
+    <Image Include="ico\W&amp;E.png" />
     <Image Include="ico\W&amp;E_dark.ico" />
   </ItemGroup>
   <ItemGroup>

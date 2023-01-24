@@ -81,6 +81,27 @@
     <Image Include="ico\note_dark.ico">
       <Filter>资源文件</Filter>
     </Image>
+    <Image Include="ico\copy.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\main.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\note.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\paste.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\screenshot.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\undo.png">
+      <Filter>资源文件</Filter>
+    </Image>
+    <Image Include="ico\W&amp;E.png">
+      <Filter>资源文件</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />
