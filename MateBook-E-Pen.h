@@ -120,6 +120,7 @@ HRESULT                 check_update();
 HRESULT                 update(HWND hWnd, int state);
 HRESULT                 onenote(HWND hwnd_onenote);
 bool                    drawboard(bool writing);
+bool					CopyFileAsBitmapToClipboard(WCHAR FileName[MAX_PATH]);
 int                     CopyFileToClipboard(WCHAR szFileName[MAX_PATH]);
 void*					main_thread();
 void*					F19_1();
