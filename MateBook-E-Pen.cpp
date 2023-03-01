@@ -2083,6 +2083,7 @@ HRESULT check_update()
 
     string str = wstring2string(text);
 	string all_info = midstr(str, "start---", "---end");
+    if (all_info == "FAILED") return S_FALSE;
     update_version = midstr(all_info, "version:", ";");
     update_info = midstr(all_info, "update_info:", ";");
 	
@@ -2399,29 +2400,21 @@ string midstr(string str, PCSTR start, PCSTR end)
         mid = str.substr(pos1, pos2 - pos1);
         return mid;
     }
-    else return str;
+    else return "FAILED";
 }
 
 string wstring2string(const wstring& ws)
 {
-    const wchar_t* _Source = ws.c_str();
-    size_t _Dsize = wcstombs(NULL, _Source, 0) + 1;
-    char* _Dest = new char[_Dsize];
-    memset(_Dest, 0, _Dsize);
-    wcstombs(_Dest, _Source, _Dsize);
-    string result = _Dest;
-    delete[]_Dest;
+    _bstr_t t = ws.c_str();
+    char* pchar = (char*)t;
+    string result = pchar;
     return result;
 }
 
 wstring string2wstring(const string& s)
 {
-    const char* _Source = s.c_str();
-    size_t _Dsize = mbstowcs(NULL, _Source, 0) + 1;
-    wchar_t* _Dest = new wchar_t[_Dsize];
-    wmemset(_Dest, 0, _Dsize);
-    mbstowcs(_Dest, _Source, _Dsize);
-    wstring result = _Dest;
-    delete[]_Dest;
+    _bstr_t t = s.c_str();
+    wchar_t* pwchar = (wchar_t*)t;
+    wstring result = pwchar;
     return result;
 }
