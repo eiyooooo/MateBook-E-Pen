@@ -125,32 +125,27 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     UNREFERENCED_PARAMETER(lpCmdLine);
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     GdiplusStartup(&m_pGdiToken, &m_gdiplusStartupInput, NULL);
-
+    hHook = SetWindowsHookEx(WH_KEYBOARD_LL, PenProc, NULL, 0);
+	
 	switch_dark(get_if_dark());
 	
 	thread tid1(main_thread);
 	tid1.detach();
 	
-	thread tid2(F19_1);
+	thread tid2(auto_switch_back);
 	tid2.detach();
-
-	thread tid3(F19_2);
+	
+	thread tid3(light_or_dark);
 	tid3.detach();
 	
-	thread tid4(auto_switch_back);
+	thread tid4(ink_setting_lock);
 	tid4.detach();
-	
-	thread tid5(light_or_dark);
+
+	thread tid5(SubFloatMotion);
 	tid5.detach();
-	
-	thread tid6(ink_setting_lock);
-	tid6.detach();
 
-	thread tid7(SubFloatMotion);
-	tid7.detach();
-
-    thread tid8(SubFloatSelect);
-    tid8.detach();
+    thread tid6(SubFloatSelect);
+    tid6.detach();
 	
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_MATEBOOKEPEN, szWindowClass, MAX_LOADSTRING);
@@ -228,6 +223,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
         Shell_NotifyIcon(NIM_DELETE, &nid);
 		GdiplusShutdown(m_pGdiToken);
+        UnhookWindowsHookEx(hHook);
+        CoUninitialize();
         PostQuitMessage(0);
         break;
     default:
@@ -1255,8 +1252,11 @@ bool IsCursorInTriangle(POINT cursorPos, POINT triVertex1, POINT triVertex2, POI
 
 void* main_thread()
 {
-    char title[256];
+    char title[1024];
 	bool writing = true;
+    vector<CComPtr<IAccessible>> acc;
+    IAcc_Located onenote_located;
+    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 	
     while (1)
     {
@@ -1269,16 +1269,137 @@ void* main_thread()
             GetWindowTextA(hwnd_current, title, sizeof(title));
             if (BUTTON)
             {
+				// OneNote for Windows 10
                 if (StrStrA(title, "OneNote for Windows 10") != NULL)
-                {
-                    onenote(hwnd_current);
+                {	
+                    bool noselect = false;
+                    if (onenote_located.acc_eraser == nullptr || onenote_located.acc_pen == nullptr) if_used = 0;
+                    if (if_used <= 0 || onenote_located.hwnd_current != hwnd_current
+                        || getname(onenote_located.acc_eraser, CHILDID_SELF).find(onenote_located.acc_eraser_name) == string::npos
+                        || getname(onenote_located.acc_pen, CHILDID_SELF).find(onenote_located.acc_pen_name) == string::npos)
+                    {
+                        onenote_located.hwnd_current = hwnd_current;
+                        acc.push_back(nullptr);
+                        HWND hwnd_child = FindWindowEx(hwnd_current, NULL, L"Windows.UI.Core.CoreWindow", NULL);
+                        hr = AccessibleObjectFromWindow(hwnd_child, OBJID_WINDOW, IID_IAccessible, (void**)&acc[0]); //0
+                        acc.push_back(findchild(acc[acc.size() - 1], L"OneNote for Windows 10", 1)); //1
+                        acc.push_back(findchild(acc[acc.size() - 1], L"NAMELESS", 1)); //2
+                        acc.push_back(findchild(acc[acc.size() - 1], L"NAMELESS", -1)); //3
+                        if (acc[2] == acc[3])
+                        {
+                            acc[1] = findchild(acc[0], L"OneNote for Windows 10", 1); //1
+                            acc[2] = findchild(acc[1], L"NAMELESS", 1); //2
+                            acc[3] = findchild_which(acc[2], -1); //3
+                            acc.push_back(findchild_which(acc[3], 4)); //4
+                        }
+                        else
+                        {
+                            acc.push_back(findchild(acc[acc.size() - 1], L"功能区", 1)); //4
+                            acc.push_back(findchild(acc[acc.size() - 1], L"绘图", 1)); //5
+                            acc.push_back(findchild(acc[acc.size() - 1], L"下层功能区", 1)); //6
+                            if (acc[5] == nullptr)
+                            {
+                                vector<CComPtr<IAccessible>>().swap(acc); 
+                                BUTTON = FALSE;
+                                break;
+                            }
+                            //自动打开绘图功能区
+                            if (acc[6] == acc[5])
+                            {
+                                acc[5]->accDoDefaultAction(CComVariant(0));
+                                Sleep(20);
+                                acc[6] = findchild(acc[5], L"下层功能区", 1); //6
+                            }
+                            acc.push_back(findchild(acc[acc.size() - 1], L"笔", 1)); //7
+                        }
+                        //定位橡皮擦
+                        acc.push_back(findchild(acc[acc.size() - 1], L"橡皮擦", 1)); //8or5
+                        onenote_located.acc_eraser = findchild(acc[acc.size() - 1], L"橡皮擦", 1);
+                        //定位选中的或第一支笔
+                        acc.push_back(findchild_which(acc[acc.size() - 2], 2)); //9or6
+                        vector<CComPtr<IAccessible>> all_pen = findchild_all(acc[acc.size() - 1]);
+                        onenote_located.acc_pen = nullptr;
+                        for (int i = 0; i < all_pen.size(); i++)
+                        {
+                            if (getstate(all_pen[i], CHILDID_SELF).find(L"已选择") != string::npos)
+                            {
+                                onenote_located.acc_pen = all_pen[i];
+                                noselect = false;
+                                break;
+                            }
+                        }
+                        if (onenote_located.acc_pen == nullptr)
+                        {
+                            onenote_located.acc_pen = findchild_which(acc[acc.size() - 1], 1);
+                            if (getstate(onenote_located.acc_eraser, CHILDID_SELF).find(L"已选择") == string::npos)
+                            {
+                                noselect = true;
+                            }
+                            else
+                            {
+                                noselect = false;
+                            }
+                        }
+						vector<CComPtr<IAccessible>>().swap(all_pen);
+                    }
+					//储存对象名称
+                    onenote_located.acc_eraser_name = getname(onenote_located.acc_eraser, CHILDID_SELF);
+                    onenote_located.acc_pen_name = getname(onenote_located.acc_pen, CHILDID_SELF);
+                    if (onenote_located.acc_eraser_name.find(L"橡皮擦") == string::npos
+                        || onenote_located.acc_pen_name.find(L"笔:") == string::npos) if_used = -1;
+                    //获取当前工具状态并切换工具
+					CComVariant eraser_state, pen_state;
+                    if (onenote_located.acc_eraser == nullptr)if_used = -1;
+                    if (onenote_located.acc_pen == nullptr) if_used = -1;
+                    if (if_used >= 0)
+                    {
+                        onenote_located.acc_eraser->get_accState(CComVariant(0), &eraser_state);
+                        onenote_located.acc_pen->get_accState(CComVariant(0), &pen_state);
+                    }
+                    if (pen_state.lVal == 0) if_used = -1;
+                    if (if_used >= 0)
+                    {
+                        if (eraser_state.lVal == 3146754 || getstate(onenote_located.acc_eraser, CHILDID_SELF).find(L"已选择") != string::npos)
+                        {
+                            onenote_located.acc_pen->accDoDefaultAction(CComVariant(0));
+                        }
+						else if (pen_state.lVal == 3146754 || getstate(onenote_located.acc_pen, CHILDID_SELF).find(L"已选择") != string::npos)
+                        {
+                            onenote_located.acc_eraser->accDoDefaultAction(CComVariant(0));
+                        }
+                        else
+                        {
+							if_used = -1;
+                            if (noselect == true)
+                            {
+                                onenote_located.acc_eraser->accDoDefaultAction(CComVariant(0));
+                                if_used++;
+                            }
+                        }
+                    }
+                    vector<CComPtr<IAccessible>>().swap(acc);
                 }
+				
+				// Drawboard PDF
                 if (StrStrA(title, "Drawboard PDF") != NULL)
                 {
-                    writing = drawboard(writing);
+                    if (writing == true)
+                    {
+                        Sleep(1);
+                        keybd_event(0x31, 0, 0, 0);
+                        writing = false;
+                    }
+                    else
+                    {
+                        Sleep(1);
+                        keybd_event(0x32, 0, 0, 0);
+                        writing = true;
+                    }
                 }
-                BUTTON = FALSE;
+				
                 if_used++;
+                if (if_used <= 0) break;
+                BUTTON = FALSE;
             }
             break;
         }
@@ -1365,29 +1486,19 @@ void* main_thread()
 	return NULL;
 }
 
-// 软件打开时持续检测侧键是否双击
-void* F19_1()
+LRESULT CALLBACK PenProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-    while (1)
+    PKBDLLHOOKSTRUCT pKbdStruct = (PKBDLLHOOKSTRUCT)lParam;
+
+    if (nCode == HC_ACTION)
     {
-        Sleep(1);
-        if (GetAsyncKeyState(VK_F19))
+        if (pKbdStruct->vkCode == VK_F19 && wParam == WM_KEYDOWN)
         {
             BUTTON = TRUE;
         }
     }
-}
-void* F19_2()
-{
-    Sleep(1);
-    while (1)
-    {
-        Sleep(1);
-        if (GetAsyncKeyState(VK_F19))
-        {
-            BUTTON = TRUE;
-        }
-    }
+
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
 void* auto_switch_back()
@@ -1419,82 +1530,6 @@ void* auto_switch_back()
                 switch_back = FALSE;
             }
         }
-    }
-}
-
-HRESULT onenote(HWND hwnd_onenote)
-{
-    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-	
-    CComPtr<IAccessible> acc0 = nullptr;
-    CComPtr<IAccessible> acc1 = nullptr;
-    CComPtr<IAccessible> acc2 = nullptr;
-    CComPtr<IAccessible> acc_eraser = nullptr;
-    CComPtr<IAccessible> acc_pen = nullptr;
-    HWND hwnd_child = nullptr;
-	
-	hwnd_child = FindWindowEx(hwnd_onenote, NULL, L"Windows.UI.Core.CoreWindow", NULL);
-    hr = AccessibleObjectFromWindow(hwnd_child, OBJID_WINDOW, IID_IAccessible, (void**)&acc0);
-    acc1 = findchild(acc0, L"OneNote for Windows 10", 1);
-    acc2 = findchild(acc1, L"NAMELESS", 1);
-    acc0 = findchild(acc2, L"NAMELESS", -1);
-    if (acc0 == acc2)
-    {
-        acc1 = findchild(acc0, L"OneNote for Windows 10", 1);
-        acc2 = findchild(acc1, L"NAMELESS", 1);
-        acc0 = findchild_which(acc2, -1);
-        acc1 = findchild_which(acc0, 4);
-    }
-    else
-    {
-        acc1 = findchild(acc0, L"功能区", 1);
-        acc2 = findchild(acc1, L"绘图", 1);
-        acc0 = findchild(acc2, L"下层功能区", 1);
-        if (acc2 == nullptr) return E_FAIL;
-        //自动打开绘图功能区
-        if (acc0 == acc2)
-        {
-            acc2->accDoDefaultAction(CComVariant(0));
-            Sleep(20);
-            acc0 = findchild(acc2, L"下层功能区", 1);
-        }
-        acc1 = findchild(acc0, L"笔", 1);
-    }
-    //定位橡皮擦
-    acc2 = findchild(acc1, L"橡皮擦", 1);
-    acc_eraser = findchild(acc2, L"橡皮擦", 1);
-    //定位第一支笔
-    acc2 = findchild_which(acc1, 2);
-    acc_pen = findchild_which(acc2, 1);
-    //获取当前工具状态并切换工具
-    CComVariant eraser_state;
-	if (acc_eraser == nullptr) return E_FAIL;
-    if (acc_pen == nullptr) return E_FAIL;
-    hr = acc_eraser->get_accState(CComVariant(0), &eraser_state);
-    if (eraser_state.lVal == 3146754)
-    {
-        acc_pen->accDoDefaultAction(CComVariant(0));
-    }
-    else
-    {
-        acc_eraser->accDoDefaultAction(CComVariant(0));
-    }
-	CoUninitialize();
-	return S_OK;
-}
-
-bool drawboard(bool writing)
-{
-    if (writing == true) {
-        Sleep(1);
-        keybd_event(0x31, 0, 0, 0);
-        return false;
-    }
-    else
-    {
-        Sleep(1);
-        keybd_event(0x32, 0, 0, 0);
-        return true;
     }
 }
 
@@ -1539,6 +1574,7 @@ void* note_pic_copy()
             memcpy(szFileName, note_save_path, wcslen(note_save_path) * sizeof(WCHAR));
             memcpy(szFileName + wcslen(note_save_path), pNotify->FileName, pNotify->FileNameLength);
 
+			Sleep(500);
             if (pNotify->Action == FILE_ACTION_ADDED) CopyFileAsBitmapToClipboard(szFileName);
         }
         if (if_used == 0)
@@ -1886,6 +1922,41 @@ CComPtr<IAccessible> findchild_which(CComPtr<IAccessible> acc_in, int which)
     }
 }
 
+// 查找全部子元素
+vector<CComPtr<IAccessible>> findchild_all(CComPtr<IAccessible> acc_in)
+{
+	vector<CComPtr<IAccessible>> acc_child;
+	long childCount, returnCount;
+	if (acc_in == nullptr) return acc_child;
+	HRESULT hr = acc_in->get_accChildCount(&childCount);
+	if (childCount == 0) return acc_child;
+	// 获取子元素
+	std::unique_ptr<VARIANT[]> varChild(new VARIANT[childCount]);
+	hr = ::AccessibleChildren(acc_in, 0, childCount, varChild.get(), &returnCount);
+	if (hr != S_OK)
+	{
+		varChild.reset();
+		return acc_child;
+	}
+
+	// 返回当前子元素个数
+	current_count = returnCount;
+
+	for (int i = 0; i < returnCount; i++)
+	{
+		VARIANT vtChild = varChild[i];
+		if (vtChild.vt == VT_DISPATCH)
+		{
+			CComQIPtr<IAccessible> pAccChild = varChild[i].pdispVal;
+			if (!pAccChild) continue;
+			acc_child.push_back(pAccChild);
+		}
+	}
+
+	varChild.reset();
+	return acc_child;
+}
+
 BOOL CALLBACK enum_callback(HWND hwnd, LPARAM lParam)
 {
     char WindowText[256];
@@ -1923,6 +1994,7 @@ HWND findchlidwindow(HWND hwnd_in, const char* Windowname)
 // 获取子元素名称
 wstring getname(CComPtr<IAccessible> acc, CComVariant varChild)
 {
+    if (acc == nullptr) return L"GET NAME ERROR";
     wstring strName;
     BSTR bstrName = NULL;
     HRESULT hr = acc->get_accName(varChild, &bstrName);
@@ -1941,11 +2013,44 @@ wstring getname(CComPtr<IAccessible> acc, CComVariant varChild)
 // 获取子元素角色
 wstring getrole(CComPtr<IAccessible> acc, CComVariant varChild)
 {
+    if (acc == nullptr) return L"GET ROLE ERROR";
     CComVariant varRoleID;
     HRESULT hr = acc->get_accRole(varChild, &varRoleID);
     WCHAR sRoleBuff[1024] = { 0 };
     hr = ::GetRoleText(varRoleID.lVal, sRoleBuff, 1024);
     return sRoleBuff;
+}
+
+// 获取子元素状态
+wstring getstate(CComPtr<IAccessible> acc, CComVariant varChild)
+{
+    if (acc == nullptr) return L"GET STATE ERROR";
+    CComVariant varState;
+    HRESULT hr = acc->get_accState(varChild, &varState);
+    WCHAR sStateBuff[1024] = { 0 };
+    wstring stateStr;
+    int state_count = 0;
+
+    DWORD state = varState.lVal;
+
+    while (state != 0)
+    {
+        DWORD curState = state & (~(state - 1));
+        hr = GetStateText(curState, sStateBuff, 1024);
+        if (state_count > 0)
+        {
+            stateStr.append(L", ");
+        }
+        state_count++;
+        stateStr.append(sStateBuff);
+        state = state & (~curState);
+    }
+
+    if (stateStr.empty())
+    {
+        stateStr = L"STATELESS";
+    }
+    return stateStr;
 }
 
 // 检查程序进程是否运行

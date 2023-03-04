@@ -43,8 +43,19 @@ using namespace Gdiplus;
 #pragma warning(disable: 4267)
 #pragma warning(disable: 4244)
 
+struct IAcc_Located
+{
+	HWND hwnd_current = nullptr;
+	HWND hwnd_old = nullptr;
+	CComPtr<IAccessible> acc_eraser = nullptr;
+	wstring acc_eraser_name = L"";
+	CComPtr<IAccessible> acc_pen = nullptr;
+	wstring acc_pen_name = L"";
+};
+
 // 全局变量
 HINSTANCE hInst;                                // 当前实例
+HHOOK hHook;									// 钩子句柄
 WCHAR szTitle[MAX_LOADSTRING];                  // 标题栏文本
 WCHAR szWindowClass[MAX_LOADSTRING];            // 主窗口类名
 HWND inst_hwnd;                                 // 主窗口句柄
@@ -84,6 +95,7 @@ HWND WnE, SCREENSHOT, NOTE, COPY, PASTE, UNDO;
 ATOM                    MyRegisterClass(HINSTANCE hInstance);
 BOOL                    InitInstance(HINSTANCE hInstance, int nCmdShow);
 LRESULT CALLBACK        WndProc(HWND, UINT, WPARAM, LPARAM);
+LRESULT CALLBACK		PenProc(int nCode, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK        ToUpdate(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK        show_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK        popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -102,8 +114,10 @@ HWND                    findwindow(const char* Windowname);
 HWND                    findchlidwindow(HWND hwnd_in, const char* Windowname);
 CComPtr<IAccessible>    findchild(CComPtr<IAccessible> acc_in, const wchar_t* name, int which);
 CComPtr<IAccessible>    findchild_which(CComPtr<IAccessible> acc_in, int which);
+vector<CComPtr<IAccessible>> findchild_all(CComPtr<IAccessible> acc_in);
 wstring                 getname(CComPtr<IAccessible> acc, CComVariant varChild);
 wstring                 getrole(CComPtr<IAccessible> acc, CComVariant varChild);
+wstring					getstate(CComPtr<IAccessible> acc, CComVariant varChild);
 BOOL					isProgramRunning(const wchar_t* program_name);
 BOOL					killProcess(const wchar_t* program_name);
 vector<wstring>			findfiles(wstring filePath, wstring fileFormat);
@@ -118,13 +132,9 @@ BOOL                    get_if_dark();
 void                    switch_dark(BOOL if_dark);
 HRESULT                 check_update();
 HRESULT                 update(HWND hWnd, int state);
-HRESULT                 onenote(HWND hwnd_onenote);
-bool                    drawboard(bool writing);
 bool					CopyFileAsBitmapToClipboard(WCHAR FileName[MAX_PATH]);
 int                     CopyFileToClipboard(WCHAR szFileName[MAX_PATH]);
 void*					main_thread();
-void*					F19_1();
-void*					F19_2();
 void*					auto_switch_back();
 void*					light_or_dark();
 void*					ink_setting_lock();
