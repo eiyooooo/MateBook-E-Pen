@@ -1,7 +1,7 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "1.0.0"
+#define version "1.1.0"
 
 /////////////////////////////////////////////
 /////////////////           /////////////////
