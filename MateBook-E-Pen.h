@@ -55,6 +55,7 @@ struct IAcc_Located
 
 // 全局变量
 HINSTANCE hInst;                                // 当前实例
+HINSTANCE hDll_PenService;						// 外部dll实例
 HHOOK hHook;									// 钩子句柄
 WCHAR szTitle[MAX_LOADSTRING];                  // 标题栏文本
 WCHAR szWindowClass[MAX_LOADSTRING];            // 主窗口类名
@@ -68,7 +69,6 @@ long current_count = 0;                         // 当前子元素的数量
 BOOL BUTTON = FALSE;                            // 笔侧键是否按下
 string update_version;  					    // 更新版本号
 string update_info; 			  			    // 更新信息
-BOOL if_init = FALSE;                           // 是否初始化
 GdiplusStartupInput m_gdiplusStartupInput;		// GDI+初始化结构体
 ULONG_PTR m_pGdiToken;							// GDI+初始化标识符
 int default_mode = 1;							// 默认模式
@@ -137,5 +137,10 @@ int                     CopyFileToClipboard(WCHAR szFileName[MAX_PATH]);
 void*					main_thread();
 void*					auto_switch_back();
 void*					light_or_dark();
+void*					PenKeyFunc_lock();
 void*					ink_setting_lock();
 void*					note_pic_copy();
+
+// 外部函数声明
+typedef void			(*int2void)(int);
+int2void				CommandSendSetPenKeyFunc;

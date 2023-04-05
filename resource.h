@@ -50,7 +50,6 @@
 #define ID_1_32773                      32773
 #define ID_1_32774                      32774
 #define ID_1_32775                      32775
-#define RE_INIT                         32776
 #define UPDATE                          32777
 #define CLOSE                           32778
 #define ID_1_32779                      32779

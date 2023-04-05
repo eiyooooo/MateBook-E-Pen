@@ -1,7 +1,7 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "1.1.0"
+#define version "1.2.0"
 
 /////////////////////////////////////////////
 /////////////////           /////////////////
@@ -11,105 +11,37 @@
 
 void init(HWND hWnd)
 {
-	// 图标初始化(仅首次)
-    if (if_init == FALSE) Tray(hWnd);
-
-	// 首次检测前是否完成过初始化
-    vector<wstring> xmlfileNames = findfiles(L"C:\\ProgramData\\Huawei\\HuaweiPenAPP\\", L"*.xml");
-	int modified_count1 = 0, modified_count2 = 0;;
-    bool pre_init = false;
-    if (if_init == FALSE)
-    {
-        for (int i = 0; i < xmlfileNames.size(); i++)
-        {
-            if (read_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>").find(L"2") != wstring::npos)
-            {
-                modified_count1++;
-                Sleep(100);
-            }
-        }
-        for (int i = 0; i < xmlfileNames.size(); i++)
-        {
-            modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"2");
-        }
-        for (int i = 0; i < xmlfileNames.size(); i++)
-        {
-            if (read_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>").find(L"2") != wstring::npos)
-            {
-                modified_count2++;
-                Sleep(100);
-            }
-        }
-        if (modified_count1 == modified_count2 && isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
-        {
-            pre_init = true;
-            show_message(L"初始化中", L"大概需要4秒，请稍等...");
-        }
-    }
+    Tray(hWnd);
 	
-    if (if_init > 0 || !pre_init)
+    hDll_PenService = LoadLibrary(L"C:\\Program Files\\Huawei\\HuaweiPen\\PenService.dll");
+    if (hDll_PenService == NULL)
     {
-        show_message(L"初始化中", L"大概需要8秒，请稍等...");
-
-        // 第一步
-        if (isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
-        {
-            killProcess(L"HuaweiPenAPP.exe");
-        }
-        Sleep(500);
-
-        // 第二步
-        for (int i = 0; i < xmlfileNames.size(); i++)
-        {
-            modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"3");
-        }
-        Sleep(500);
-
-        // 第三步
-        ShellExecute(NULL, _T("open"), _T("HuaweiPenAPP.exe"), NULL, _T("%programfiles%\\Huawei\\HuaweiPen"), SW_SHOW);
-        Sleep(1000);
-
-        // 第四步
-        if (isProgramRunning(L"HuaweiPenAPP.exe") == TRUE)
-        {
-            killProcess(L"HuaweiPenAPP.exe");
-        }
-        Sleep(500);
-
-        // 第五步
-        for (int i = 0; i < xmlfileNames.size(); i++)
-        {
-            modify_file_text(wstring2string(xmlfileNames[i]), L"<KeyFunc>", L"</KeyFunc>", L"2");
-        }
-        Sleep(500);
-
-        // 第六步
-        ShellExecute(NULL, _T("open"), _T("HuaweiPenAPP.exe"), NULL, _T("%programfiles%\\Huawei\\HuaweiPen"), SW_SHOW);
-        Sleep(1000);
+        hDll_PenService = LoadLibrary(L"C:\\Program Files\\Huawei\\PCManager\\components\\accessories_center\\accessories_app\\AccessoryApp\\Lib\\Plugins\\Depend\\PenService.dll");
+		if (hDll_PenService == NULL)
+		{
+			MessageBox(hWnd, L"请检查华为电脑管家是否正确安装！", L"出错啦！", MB_OK);
+            SendMessage(hWnd, WM_CLOSE, 0, 0);
+            return;
+		}
     }
+    CommandSendSetPenKeyFunc = (int2void)GetProcAddress(hDll_PenService, "CommandSendSetPenKeyFunc");
+    CommandSendSetPenKeyFunc(2);
+    thread tid1(PenKeyFunc_lock);
+    tid1.detach();
 	
-    // 第七步
     SetRegValue_REG_DWORD(1, "Software\\Microsoft\\Windows\\CurrentVersion\\ClickNote\\UserCustomization\\DoubleClickBelowLock", "Override", (DWORD)1);
+    thread tid2(ink_setting_lock);
+    tid2.detach();
 	
-	// 检查更新(仅首次)
-    if (if_init == FALSE)
+    if (check_update() == S_OK)
     {
-        if (check_update() == S_OK)
+        if (StrCmpA(update_version.c_str(), version) != 0)
         {
-            if (StrCmpA(update_version.c_str(), version) != 0)
-            {
-                update(hWnd, CanUpdate);
-            }
+            update(hWnd, CanUpdate);
         }
     }
 
-    show_message(L"初始化完成", L"若功能无法使用请重新初始化");
-	
-    // 图标初始化(仅首次)
-    if (if_init == FALSE) Change_Icon();
-
-    // 结束初始化
-    if_init++;
+    Change_Icon();
 }
 
 ///////////////////////////////////////////////
@@ -137,15 +69,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 	
 	thread tid3(light_or_dark);
 	tid3.detach();
-	
-	thread tid4(ink_setting_lock);
+
+	thread tid4(SubFloatMotion);
 	tid4.detach();
 
-	thread tid5(SubFloatMotion);
-	tid5.detach();
-
-    thread tid6(SubFloatSelect);
-    tid6.detach();
+    thread tid5(SubFloatSelect);
+    tid5.detach();
 	
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_MATEBOOKEPEN, szWindowClass, MAX_LOADSTRING);
@@ -719,10 +648,6 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             else update(hWnd, UpToDate);
         }
         else update(hWnd, CheckUpdateFailed);
-    }
-    if (clicked == RE_INIT)
-    {
-        init(hWnd);
     }
     if (clicked == FLOAT_SWITCH)
     {
@@ -1794,9 +1719,19 @@ void switch_dark(BOOL if_dark)
 
 ////////////////////////////////////////////////////
 /////////////////                  /////////////////
-/////////////////  锁定win ink设置  /////////////////
+/////////////////   锁定笔相关设置  /////////////////
 /////////////////                  /////////////////
 ////////////////////////////////////////////////////
+
+void* PenKeyFunc_lock()
+{
+    while (1)
+    {
+        Sleep(5000);
+        CommandSendSetPenKeyFunc(2);
+    }
+    return NULL;
+}
 
 void* ink_setting_lock()
 {
