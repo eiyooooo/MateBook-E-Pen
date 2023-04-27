@@ -140,6 +140,7 @@ void*					light_or_dark();
 void*					PenKeyFunc_lock();
 void*					ink_setting_lock();
 void*					note_pic_copy();
+void*					init_check_update(HWND hWnd);
 
 // 外部函数声明
 typedef void			(*int2void)(int);

@@ -33,6 +33,19 @@ void init(HWND hWnd)
     thread tid2(ink_setting_lock);
     tid2.detach();
 	
+	if (!isProgramRunning(L"PenKit.exe"))
+    {
+        ShellExecute(NULL, _T("open"), _T("PenKit.exe"), NULL, _T("%programfiles%\\Huawei\\PenKit"), SW_SHOW);
+    }
+	
+	thread tid3(init_check_update, hWnd);
+	tid3.detach();
+
+    Change_Icon();
+}
+
+void* init_check_update(HWND hWnd)
+{
     if (check_update() == S_OK)
     {
         if (StrCmpA(update_version.c_str(), version) != 0)
@@ -40,8 +53,7 @@ void init(HWND hWnd)
             update(hWnd, CanUpdate);
         }
     }
-
-    Change_Icon();
+	return 0;
 }
 
 ///////////////////////////////////////////////
@@ -1332,6 +1344,7 @@ void* main_thread()
         {
             if (BUTTON)
             {
+				Sleep(100);
                 keybd_event(VK_LWIN, 0, 0, 0);
                 keybd_event(VK_SHIFT, 0, 0, 0);
                 keybd_event(0x53, 0, 0, 0);
@@ -1362,6 +1375,7 @@ void* main_thread()
         {
             if (BUTTON)
             {
+                Sleep(100);
                 keybd_event(VK_CONTROL, 0, 0, 0);
                 keybd_event(0x43, 0, 0, 0);
                 keybd_event(0x43, 0, KEYEVENTF_KEYUP, 0);
@@ -1377,6 +1391,7 @@ void* main_thread()
             if (note_pic_copy_running == TRUE) DeleteFile(temp_file);
             if (BUTTON)
             {
+                Sleep(100);
                 keybd_event(VK_CONTROL, 0, 0, 0);
                 keybd_event(0x56, 0, 0, 0);
                 keybd_event(0x56, 0, KEYEVENTF_KEYUP, 0);
@@ -1394,6 +1409,7 @@ void* main_thread()
         {
             if (BUTTON)
             {
+                Sleep(100);
                 keybd_event(VK_CONTROL, 0, 0, 0);
                 keybd_event(0x5A, 0, 0, 0);
                 keybd_event(0x5A, 0, KEYEVENTF_KEYUP, 0);
