@@ -2,6 +2,7 @@
 #include "MateBook-E-Pen.h"
 
 #define version "1.2.0"
+#define dev_mode true
 
 /////////////////////////////////////////////
 /////////////////           /////////////////
@@ -11,15 +12,17 @@
 
 void init(HWND hWnd)
 {
+	// 托盘图标
     Tray(hWnd);
 	
+	// 调整华为笔设置
     hDll_PenService = LoadLibrary(L"C:\\Program Files\\Huawei\\HuaweiPen\\PenService.dll");
     if (hDll_PenService == NULL)
     {
         hDll_PenService = LoadLibrary(L"C:\\Program Files\\Huawei\\PCManager\\components\\accessories_center\\accessories_app\\AccessoryApp\\Lib\\Plugins\\Depend\\PenService.dll");
 		if (hDll_PenService == NULL)
 		{
-			MessageBox(hWnd, L"请检查华为电脑管家是否正确安装！", L"出错啦！", MB_OK);
+			MessageBox(hWnd, L"请检查华为电脑管家和手写笔相关驱动是否正确安装！", L"出错啦！", MB_OK);
             SendMessage(hWnd, WM_CLOSE, 0, 0);
             return;
 		}
@@ -29,18 +32,44 @@ void init(HWND hWnd)
     thread tid1(PenKeyFunc_lock);
     tid1.detach();
 	
+	// 调整系统笔设置
     SetRegValue_REG_DWORD(1, "Software\\Microsoft\\Windows\\CurrentVersion\\ClickNote\\UserCustomization\\DoubleClickBelowLock", "Override", (DWORD)1);
     thread tid2(ink_setting_lock);
     tid2.detach();
 	
+	// 华为批注
 	if (!isProgramRunning(L"PenKit.exe"))
     {
         ShellExecute(NULL, _T("open"), _T("PenKit.exe"), NULL, _T("%programfiles%\\Huawei\\PenKit"), SW_SHOW);
     }
 	
-	thread tid3(init_check_update, hWnd);
-	tid3.detach();
+    // 配置文件
+    fs::path current_path = fs::current_path();
+    config_file_path = current_path / "MateBook-E-Pen.json";
+    vector<pair<string, json>> default_data =
+    {
+        {"default_mode", 1},
+        {"auto_popup", true},
+        {"pen_and_eraser_save", json::object()}
+    };
+    if (fs::exists(config_file_path))
+    {
+        config_data = read_config(config_file_path);
+    }
+	ensure_config_valid(config_data, default_data);
+	default_mode = config_data["default_mode"];
+	auto_popup = config_data["auto_popup"];
+    thread tid3(monitor_config_change);
+    tid3.detach();
+	
+	// 检查更新
+    if (!dev_mode)
+    {
+        thread tid4(init_check_update, hWnd);
+        tid4.detach();
+    }
 
+	// 结束初始化
     Change_Icon();
 }
 
@@ -158,6 +187,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         if (lParam == WM_RBUTTONDOWN)
         {
+            default_mode_show_on_menu();
             IconRightClick(hWnd, message, wParam, lParam);
         }
     break;
@@ -185,91 +215,108 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_INITDIALOG:
         Brush = CreateSolidBrush(RGB(255, 255, 255));
         return (INT_PTR)TRUE;
-
     case WM_CTLCOLORDLG:
         return (INT_PTR)Brush;
     case WM_CTLCOLORSTATIC:
         return (INT_PTR)Brush;
 
     case WM_COMMAND:
-        if (LOWORD(wParam) == IDC_WnE)
+        switch (LOWORD(wParam))
         {
-            state = IDI_UNDO;
-            Change_Icon();
-            SetDlgItemText(hDlg, IDC_MODE, L"笔/橡皮模式");
-            SetTimer(hDlg, 1, 3000, NULL);
+		case IDC_START:
+        {
+            EnableWindow(GetDlgItem(hDlg, IDC_START), FALSE);
+            EnableWindow(GetDlgItem(hDlg, IDC_TEST), TRUE);
+            EnableWindow(GetDlgItem(hDlg, IDC_WINDOW), TRUE);
+            SetDlgItemText(hDlg, IDC_SAVE, L"保存并关闭");
+            SetDlgItemText(hDlg, IDC_S10, L"");
+			KillTimer(hDlg, 1);
+            KillTimer(hDlg, 2);
+            KillTimer(hDlg, 3);
+			KillTimer(hDlg, 4);
+			KillTimer(hDlg, 5);
+            break;
+        }
+		case IDC_TEST:
+		{
+			break;
+		}
+        case IDC_SAVE:
+        {
+            KillTimer(hDlg, 1);
+            KillTimer(hDlg, 2);
+            KillTimer(hDlg, 3);
+            KillTimer(hDlg, 4);
+            KillTimer(hDlg, 5);
+            if (IsDlgButtonChecked(hDlg, IDC_CHECK1) == BST_CHECKED)
+            {
+				auto_popup = false;
+            }
+			else
+			{
+				auto_popup = true;
+			}
+            config_data["auto_popup"] = auto_popup;
+            DeleteObject(Brush);
+            EndDialog(hDlg, LOWORD(wParam));
+            hwnd_popup = inst_hwnd;
             return (INT_PTR)TRUE;
         }
-        if (LOWORD(wParam) == IDC_SCREENSHOT)
-        {
-            state = IDI_WnE;
-            Change_Icon();
-			SetDlgItemText(hDlg, IDC_MODE, L"截图模式");
-            SetTimer(hDlg, 1, 3000, NULL);
-            return (INT_PTR)TRUE;
-        }
-        if (LOWORD(wParam) == IDC_NOTE)
-        {
-            state = IDI_SCREENSHOT;
-            Change_Icon();
-            SetDlgItemText(hDlg, IDC_MODE, L"批注模式");
-            SetTimer(hDlg, 1, 3000, NULL);
-            return (INT_PTR)TRUE;
-        }
-        if (LOWORD(wParam) == IDC_COPY)
-        {
-            state = IDI_NOTE;
-            Change_Icon();
-			SetDlgItemText(hDlg, IDC_MODE, L"复制模式");
-            SetTimer(hDlg, 1, 3000, NULL);
-            return (INT_PTR)TRUE;
-        }
-        if (LOWORD(wParam) == IDC_PASTE)
-        {
-            state = IDI_COPY;
-            Change_Icon();
-			SetDlgItemText(hDlg, IDC_MODE, L"粘贴模式");
-            SetTimer(hDlg, 1, 3000, NULL);
-            return (INT_PTR)TRUE;
-        }
-        if (LOWORD(wParam) == IDC_UNDO)
-        {
-            state = IDI_PASTE;
-            Change_Icon();
-			SetDlgItemText(hDlg, IDC_MODE, L"撤销模式");
-            SetTimer(hDlg, 1, 3000, NULL);
-            return (INT_PTR)TRUE;
         }
         break;
     case WM_SHOWWINDOW:
-		SetTimer(hDlg, 1, 3000, NULL);
-        switch (state)
-        {
-        case IDI_WnE:
-            SetDlgItemText(hDlg, IDC_MODE, L"笔/橡皮模式");
-            break;
-        case IDI_SCREENSHOT:
-            SetDlgItemText(hDlg, IDC_MODE, L"截图模式");
-            break;
-        case IDI_NOTE:
-            SetDlgItemText(hDlg, IDC_MODE, L"批注模式");
-            break;
-        case IDI_COPY:
-            SetDlgItemText(hDlg, IDC_MODE, L"复制模式");
-            break;
-        case IDI_PASTE:
-            SetDlgItemText(hDlg, IDC_MODE, L"粘贴模式");
-            break;
-        case IDI_UNDO:
-            SetDlgItemText(hDlg, IDC_MODE, L"撤销模式");
-            break;
-        }
+        SetTimer(hDlg, 5, 5000, NULL);
+        SetTimer(hDlg, 4, 4000, NULL);
+        SetTimer(hDlg, 3, 3000, NULL);
+        SetTimer(hDlg, 2, 2000, NULL);
+		SetTimer(hDlg, 1, 1000, NULL);
+        if (!auto_popup) SendDlgItemMessage(hDlg, IDC_CHECK1, BM_SETCHECK, BST_CHECKED, 0);
 		break;
     case WM_TIMER:
-        DeleteObject(Brush);
-		EndDialog(hDlg, LOWORD(wParam));
-		hwnd_popup = inst_hwnd;
-        break;
+        switch (wParam)
+        {
+        case 1:
+        {
+            KillTimer(hDlg, 1);
+            SetDlgItemText(hDlg, IDC_S10, L"4秒内无操作自动关闭");
+            break;
+        }
+        case 2:
+        {
+            KillTimer(hDlg, 2);
+            SetDlgItemText(hDlg, IDC_S10, L"3秒内无操作自动关闭");
+            break;
+        }
+        case 3:
+        {
+            KillTimer(hDlg, 3);
+            SetDlgItemText(hDlg, IDC_S10, L"2秒内无操作自动关闭");
+            break;
+        }
+        case 4:
+        {
+            KillTimer(hDlg, 4);
+            SetDlgItemText(hDlg, IDC_S10, L"1秒内无操作自动关闭");
+            break;
+        }
+        case 5:
+        {
+            KillTimer(hDlg, 5);
+            if (IsDlgButtonChecked(hDlg, IDC_CHECK1) == BST_CHECKED)
+            {
+                auto_popup = false;
+            }
+            else
+            {
+                auto_popup = true;
+            }
+            config_data["auto_popup"] = auto_popup;
+            DeleteObject(Brush);
+            EndDialog(hDlg, LOWORD(wParam));
+            hwnd_popup = inst_hwnd;
+            return (INT_PTR)TRUE;
+        }
+        }
     }
     return (INT_PTR)FALSE;
 }
@@ -636,6 +683,7 @@ void FloatMouse(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     case WM_RBUTTONDOWN:
         {
+            default_mode_show_on_menu();
             IconRightClick(hWnd, message, wParam, lParam);
             break;
         }
@@ -660,6 +708,10 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             else update(hWnd, UpToDate);
         }
         else update(hWnd, CheckUpdateFailed);
+    }
+    if (clicked == WnE_SET)
+    {
+        DialogBox(hInst, MAKEINTRESOURCE(IDD_POPUP), hWnd, popup);
     }
     if (clicked == FLOAT_SWITCH)
     {
@@ -699,6 +751,42 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     }
 	if (clicked == ID_1_32773)
 	{
+        default_mode = 1;
+        default_mode_show_on_menu();
+	}
+    if (clicked == ID_1_32774)
+    {
+        default_mode = 2;
+        default_mode_show_on_menu();
+    }
+    if (clicked == ID_1_32775)
+    {
+		default_mode = 3;
+        default_mode_show_on_menu();
+    }
+    if (clicked == ID_1_32779)
+    {
+		default_mode = 4;
+        default_mode_show_on_menu();
+    }
+    if (clicked == ID_32783)
+    {
+        default_mode = 5;
+        default_mode_show_on_menu();
+    }
+	if (clicked == ID_32782)
+	{
+        default_mode = 0;
+        default_mode_show_on_menu();
+	}
+    config_data["default_mode"] = default_mode;
+}
+
+// 粘贴后跳转到自定义模式在菜单中显示
+void default_mode_show_on_menu()
+{
+    if (default_mode == 1)
+    {
         CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32775, MF_UNCHECKED);
@@ -706,9 +794,8 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32773, MF_CHECKED);
-        default_mode = 1;
-	}
-    if (clicked == ID_1_32774)
+    }
+    if (default_mode == 2)
     {
         CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
@@ -717,9 +804,8 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32774, MF_CHECKED);
-        default_mode = 2;
     }
-    if (clicked == ID_1_32775)
+    if (default_mode == 3)
     {
         CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
@@ -728,9 +814,8 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32775, MF_CHECKED);
-		default_mode = 3;
     }
-    if (clicked == ID_1_32779)
+    if (default_mode == 4)
     {
         CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
@@ -739,9 +824,8 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32779, MF_CHECKED);
-		default_mode = 4;
     }
-    if (clicked == ID_32783)
+    if (default_mode == 5)
     {
         CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
@@ -750,10 +834,9 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_32783, MF_CHECKED);
-        default_mode = 5;
     }
-	if (clicked == ID_32782)
-	{
+    if (default_mode == 0)
+    {
         CheckMenuItem(hMenu, ID_1_32773, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32774, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_1_32775, MF_UNCHECKED);
@@ -761,8 +844,7 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         CheckMenuItem(hMenu, ID_32783, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_32782, MF_UNCHECKED);
         CheckMenuItem(hMenu, ID_32782, MF_CHECKED);
-        default_mode = 0;
-	}
+    }
 }
 
 // 子悬浮球动画
@@ -1322,13 +1404,13 @@ void* main_thread()
                 {
                     if (writing == true)
                     {
-                        Sleep(1);
+                        Sleep(100);
                         keybd_event(0x31, 0, 0, 0);
                         writing = false;
                     }
                     else
                     {
-                        Sleep(1);
+                        Sleep(100);
                         keybd_event(0x32, 0, 0, 0);
                         writing = true;
                     }
@@ -2325,6 +2407,60 @@ INT_PTR CALLBACK show_error(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 		break;
     }
     return (INT_PTR)FALSE;
+}
+
+///////////////////////////////////////////////
+/////////////////             /////////////////
+/////////////////   配置文件   /////////////////
+/////////////////             /////////////////
+///////////////////////////////////////////////
+
+json read_config(const fs::path& config_file_path)
+{
+    json config_data;
+    std::ifstream config_file_stream(config_file_path);
+    config_file_stream >> config_data;
+    config_file_stream.close();
+    return config_data;
+}
+
+void write_config(const fs::path& config_file_path, const json& config_data)
+{
+    std::ofstream config_file_stream(config_file_path);
+    config_file_stream << config_data.dump(4);
+    config_file_stream.close();
+}
+
+void* monitor_config_change()
+{
+    json config_data_old = read_config(config_file_path);
+    while (1)
+    {
+        if (config_data_old != config_data)
+        {
+            write_config(config_file_path, config_data);
+        }
+        config_data_old = config_data;
+        Sleep(1000);
+    }
+	return 0;
+}
+
+void ensure_config_valid(json& config_data, const vector<pair<string, json>>& required_keys)
+{
+    bool updated = false;
+    for (const auto& [key, default_value] : required_keys)
+    {
+        if (!config_data.contains(key))
+        {
+            config_data[key] = default_value;
+            updated = true;
+        }
+    }
+    if (updated)
+    {
+        write_config(config_file_path, config_data);
+    }
 }
 
 ///////////////////////////////////////////////

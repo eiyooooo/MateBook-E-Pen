@@ -12,10 +12,14 @@
 #include "fstream"
 #include "TlHelp32.h"
 #include "vector"
+#include "filesystem"
+#include "nlohmann/json.hpp"
 
 using namespace std;
 using namespace ATL;
 using namespace Gdiplus;
+namespace fs = std::filesystem;
+using json = nlohmann::json;
 
 #pragma comment(lib, "uuid.lib")
 #pragma comment(lib, "Oleacc.lib")
@@ -73,6 +77,9 @@ GdiplusStartupInput m_gdiplusStartupInput;		// GDI+初始化结构体
 ULONG_PTR m_pGdiToken;							// GDI+初始化标识符
 int default_mode = 1;							// 默认模式
 BOOL float_mode = TRUE;							// 悬浮球开关
+bool auto_popup = true;							// 是否自动弹出笔/橡皮设置
+fs::path config_file_path;                      // 配置文件路径
+json config_data;                               // 配置文件数据
 
 const char* windowname;                         // 寻找的窗口名
 HWND hwnd_temp;     						    // 窗口句柄
@@ -103,6 +110,7 @@ BOOL					UpdateFloat(Image* image, HWND hwnd, int Width, int Height);
 Bitmap*					LoadImageFromResource(HMODULE hMod, const wchar_t* resid, const wchar_t* restype);
 void					FloatMouse(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 void					IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+void					default_mode_show_on_menu();
 bool					IsCursorInTriangle(POINT cursorPos, POINT triVertex1, POINT triVertex2, POINT triVertex3);
 void*					SubFloatMotion();
 void*					SubFloatSelect();
@@ -134,6 +142,10 @@ HRESULT                 check_update();
 HRESULT                 update(HWND hWnd, int state);
 bool					CopyFileAsBitmapToClipboard(WCHAR FileName[MAX_PATH]);
 int                     CopyFileToClipboard(WCHAR szFileName[MAX_PATH]);
+json					read_config(const fs::path& config_file_path);
+void					write_config(const fs::path& config_file_path, const json& config_data);
+void					ensure_config_valid(json& config_data, const vector<pair<string, json>>& required_keys);
+void*					monitor_config_change();
 void*					main_thread();
 void*					auto_switch_back();
 void*					light_or_dark();

@@ -38,15 +38,18 @@
 #define IDC_VERSIONSHOW                 1007
 #define IDC_INFOSHOW                    1008
 #define IDC_S5                          1009
-#define IDC_WnE                         1009
+#define IDC_START                       1009
 #define IDC_S4                          1010
-#define IDC_SCREENSHOT                  1010
-#define IDC_COPY                        1011
-#define IDC_PASTE                       1012
-#define IDC_UNDO                        1013
+#define IDC_TEST                        1010
+#define IDC_SAVE                        1013
 #define IDC_S7                          1014
-#define IDC_MODE                        1015
-#define IDC_NOTE                        1016
+#define IDC_PEN                         1015
+#define IDC_S8                          1016
+#define IDC_S9                          1017
+#define IDC_ERASER                      1018
+#define IDC_WINDOW                      1019
+#define IDC_S10                         1020
+#define IDC_CHECK1                      1021
 #define ID_1_32773                      32773
 #define ID_1_32774                      32774
 #define ID_1_32775                      32775
@@ -56,6 +59,8 @@
 #define FLOAT_SWITCH                    32781
 #define ID_32782                        32782
 #define ID_32783                        32783
+#define ID_Menu                         32784
+#define WnE_SET                         32785
 #define IDC_S6                          -1
 
 // Next default values for new objects
@@ -64,8 +69,8 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        168
-#define _APS_NEXT_COMMAND_VALUE         32784
-#define _APS_NEXT_CONTROL_VALUE         1016
+#define _APS_NEXT_COMMAND_VALUE         32786
+#define _APS_NEXT_CONTROL_VALUE         1022
 #define _APS_NEXT_SYMED_VALUE           111
 #endif
 #endif
