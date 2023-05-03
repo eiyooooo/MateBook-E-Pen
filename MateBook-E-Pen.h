@@ -6,6 +6,7 @@
 #include "gdiplus.h"
 #include "atlbase.h"
 #include "comutil.h"
+#include "UIAutomation.h"
 #include "shellapi.h"
 #include "string"
 #include "Shlobj.h"
@@ -26,6 +27,8 @@ using json = nlohmann::json;
 #pragma comment(lib, "comsuppw.lib")
 #pragma comment(lib, "WS2_32")
 #pragma comment(lib,"gdiplus.lib")
+#pragma comment(lib, "Ole32.lib")
+#pragma comment(lib, "UIAutomationCore.lib")
 
 #define WM_TRAY (WM_USER + 1)
 
@@ -92,6 +95,7 @@ int FloatSelectState;							// 鼠标左键状态传递
 int SubFloatSelecting;							// 悬浮窗选择状态传递
 WCHAR temp_file[MAX_PATH];                      // 批注模式临时文件路径
 POINT posMouseClick;							// 鼠标点击位置
+BOOL capturing_WnE = FALSE;						// 是否正在捕获笔/橡皮
 
 // 图标
 int idi_MAIN, idi_WnE, idi_SCREENSHOT, idi_COPY, idi_NOTE, idi_PASTE, idi_UNDO;
@@ -131,6 +135,7 @@ BOOL					killProcess(const wchar_t* program_name);
 vector<wstring>			findfiles(wstring filePath, wstring fileFormat);
 BOOL					modify_file_text(string file_name, wstring start_str, wstring end_str, wstring new_text);
 wstring					read_file_text(string file_name, wstring start_str, wstring end_str);
+void*					count_down_show(int seconds, HWND hDlg, int nIDDlgItem, LPCWSTR lpString_front, LPCWSTR lpString_back, int* return_plus_one);
 string                  GetRegValue(int nKeyType, const string& strUrl, const string& strKey);
 BOOL                    SetRegValue_REG_DWORD(int nKeyType, const string& strUrl, const string& strKey, const DWORD& dwValue);
 string                  midstr(string str, PCSTR start, PCSTR end);
@@ -147,6 +152,7 @@ void					write_config(const fs::path& config_file_path, const json& config_data)
 void					ensure_config_valid(json& config_data, const vector<pair<string, json>>& required_keys);
 void*					monitor_config_change();
 void*					main_thread();
+void*					capture_Element();
 void*					auto_switch_back();
 void*					light_or_dark();
 void*					PenKeyFunc_lock();

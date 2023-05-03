@@ -208,7 +208,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
     UNREFERENCED_PARAMETER(lParam);
-	hwnd_popup = hDlg;
     static HBRUSH Brush;
     switch (message)
     {
@@ -225,24 +224,32 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         {
 		case IDC_START:
         {
+            EnableWindow(GetDlgItem(hDlg, IDC_SAVE), FALSE);
             EnableWindow(GetDlgItem(hDlg, IDC_START), FALSE);
-            EnableWindow(GetDlgItem(hDlg, IDC_TEST), TRUE);
-            EnableWindow(GetDlgItem(hDlg, IDC_WINDOW), TRUE);
-            SetDlgItemText(hDlg, IDC_SAVE, L"保存并关闭");
+            EnableWindow(GetDlgItem(hDlg, IDC_TEST), FALSE);
+            SetDlgItemText(hwnd_popup, IDC_WINDOW, L"");
             SetDlgItemText(hDlg, IDC_S10, L"");
-			KillTimer(hDlg, 1);
+            KillTimer(hDlg, 1);
             KillTimer(hDlg, 2);
             KillTimer(hDlg, 3);
-			KillTimer(hDlg, 4);
-			KillTimer(hDlg, 5);
+            KillTimer(hDlg, 4);
+            KillTimer(hDlg, 5);
+			if (capturing_WnE == 0)
+            {
+                thread tid1(capture_Element);
+                tid1.detach();
+            }
+            capturing_WnE = 1;
             break;
         }
 		case IDC_TEST:
 		{
+            capturing_WnE = FALSE;
 			break;
 		}
         case IDC_SAVE:
         {
+			capturing_WnE = FALSE;
             KillTimer(hDlg, 1);
             KillTimer(hDlg, 2);
             KillTimer(hDlg, 3);
@@ -265,12 +272,15 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
     case WM_SHOWWINDOW:
+        hwnd_popup = hDlg;
         SetTimer(hDlg, 5, 5000, NULL);
         SetTimer(hDlg, 4, 4000, NULL);
         SetTimer(hDlg, 3, 3000, NULL);
         SetTimer(hDlg, 2, 2000, NULL);
 		SetTimer(hDlg, 1, 1000, NULL);
         if (!auto_popup) SendDlgItemMessage(hDlg, IDC_CHECK1, BM_SETCHECK, BST_CHECKED, 0);
+        SetDlgItemText(hDlg, IDC_WINDOW, L"未获取");
+        capturing_WnE = FALSE;
 		break;
     case WM_TIMER:
         switch (wParam)
@@ -301,6 +311,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         }
         case 5:
         {
+            capturing_WnE = FALSE;
             KillTimer(hDlg, 5);
             if (IsDlgButtonChecked(hDlg, IDC_CHECK1) == BST_CHECKED)
             {
@@ -1509,6 +1520,146 @@ void* main_thread()
 	return NULL;
 }
 
+void* capture_Element()
+{
+    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    CComPtr<IUIAutomation> automation;
+    hr = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_IUIAutomation, (void**)&automation);
+    CComPtr<IUIAutomationTreeWalker> treeWalker;
+    automation->get_RawViewWalker(&treeWalker);
+	
+    CComPtr<IUIAutomationElement> Element1, Element2;
+    vector<CComPtr<IUIAutomationElement>> ElementList1, ElementList2;
+	UIA_HWND window_hwnd1 = nullptr, window_hwnd2 = nullptr;
+	HWND window_Hwnd1 = nullptr, window_Hwnd2 = nullptr;
+    BSTR window_name, Element1_name, Element2_name;
+	
+    while (1)
+    {
+        if (hwnd_popup != inst_hwnd)
+        {
+            switch (capturing_WnE)
+            {
+            case 1:
+            {
+                thread tid1(count_down_show, 5, hwnd_popup, IDC_S6, L"请将光标放在控件1的上方，", L"秒后结束捕获", &capturing_WnE);
+                tid1.detach();
+
+                while (capturing_WnE == 1)
+                {
+                    POINT cursor;
+                    GetCursorPos(&cursor);
+                    automation->ElementFromPoint(cursor, &Element1);
+                    Element1->get_CurrentName(&Element1_name);
+                    wstring Element1Name(Element1_name, SysStringLen(Element1_name));
+                    SetDlgItemText(hwnd_popup, IDC_PEN, Element1Name.c_str());
+                    Sleep(100);
+                }
+
+                while (Element1)
+                {
+                    ElementList1.insert(ElementList1.begin(), Element1);
+                    treeWalker->GetParentElement(Element1, &Element1);
+                    if (!Element1) break;
+                }
+                if (ElementList1.size() == 1)
+                {
+                    ElementList1[0]->get_CurrentNativeWindowHandle(&window_hwnd1);
+                    ElementList1[0]->get_CurrentName(&window_name);
+                }
+                else
+                {
+                    ElementList1[1]->get_CurrentNativeWindowHandle(&window_hwnd1);
+                    ElementList1[1]->get_CurrentName(&window_name);
+                }
+                SetForegroundWindow((HWND)window_hwnd1);
+                Sleep(100);
+
+                window_Hwnd1 = GetForegroundWindow();
+                wstring WindowName(window_name, SysStringLen(window_name));
+                SetDlgItemText(hwnd_popup, IDC_WINDOW, WindowName.c_str());
+
+                count_down_show(3, hwnd_popup, IDC_S6, L"已捕获控件1，", L"秒后继续", NULL);
+                break;
+            }
+            case 2:
+            {
+                thread tid2(count_down_show, 5, hwnd_popup, IDC_S6, L"请将光标放在控件2的上方，", L"秒后结束捕获", &capturing_WnE);
+                tid2.detach();
+
+                while (capturing_WnE == 2)
+                {
+                    POINT cursor;
+                    GetCursorPos(&cursor);
+                    automation->ElementFromPoint(cursor, &Element2);
+                    Element2->get_CurrentName(&Element2_name);
+                    wstring Element2Name(Element2_name, SysStringLen(Element2_name));
+                    SetDlgItemText(hwnd_popup, IDC_ERASER, Element2Name.c_str());
+                    Sleep(100);
+                }
+
+                while (Element2)
+                {
+                    ElementList2.insert(ElementList2.begin(), Element2);
+                    treeWalker->GetParentElement(Element2, &Element2);
+                    if (!Element2) break;
+                }
+                if (ElementList2.size() == 1)
+                {
+                    ElementList2[0]->get_CurrentNativeWindowHandle(&window_hwnd2);
+                    ElementList2[0]->get_CurrentName(&window_name);
+                }
+                else
+                {
+                    ElementList2[1]->get_CurrentNativeWindowHandle(&window_hwnd2);
+                    ElementList2[1]->get_CurrentName(&window_name);
+                }
+                SetForegroundWindow((HWND)window_hwnd2);
+                Sleep(100);
+
+                window_Hwnd2 = GetForegroundWindow();
+                break;
+            }
+            case 3:
+            {
+                if ((window_hwnd1 != window_hwnd2 || window_hwnd1 != window_Hwnd1 ||
+                    window_hwnd1 != window_Hwnd2 || window_hwnd2 != window_Hwnd1 ||
+                    window_hwnd2 != window_Hwnd2 || window_Hwnd1 != window_Hwnd2 ||
+                    window_Hwnd1 == inst_hwnd || window_Hwnd2 == inst_hwnd))
+                {
+                    capturing_WnE = -1;
+                    SetDlgItemText(hwnd_popup, IDC_S6, L"当前控件组合不支持，请重新捕获");
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
+                    SetDlgItemText(hwnd_popup, IDC_WINDOW, L"未获取");
+                    SetDlgItemText(hwnd_popup, IDC_PEN, L"未获取");
+                    SetDlgItemText(hwnd_popup, IDC_ERASER, L"未获取");
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_SAVE), TRUE);
+                }
+                else
+                {
+                    capturing_WnE = 4;
+                    SetDlgItemText(hwnd_popup, IDC_S6, L"捕获完成，请手动删除窗口名称中含有的文件名(如有)");
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_WINDOW), TRUE);
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), TRUE);
+                }
+                break;
+            }
+			default:
+                Sleep(500);
+				break;
+            }
+        }
+        else
+        {
+            capturing_WnE == FALSE;
+            CoUninitialize();
+            return 0;
+        }
+    }
+    CoUninitialize();
+    return 0;
+}
+
 LRESULT CALLBACK PenProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
     PKBDLLHOOKSTRUCT pKbdStruct = (PKBDLLHOOKSTRUCT)lParam;
@@ -2207,6 +2358,22 @@ wstring read_file_text(string file_name, wstring start_str, wstring end_str)
 	file.close();
 
 	return L"";
+}
+
+// 文本控件倒计时显示
+void* count_down_show(int seconds, HWND hDlg, int nIDDlgItem, LPCWSTR lpString_front, LPCWSTR lpString_back, int* return_plus_one)
+{
+	int i = seconds;
+	while (i > 0)
+	{
+		Sleep(1000);
+		wchar_t str[10];
+		wsprintf(str, L"%d", i);
+        i--;
+		SetDlgItemText(hDlg, nIDDlgItem, (lpString_front + wstring(str) + lpString_back).c_str());
+	}
+	if (return_plus_one != NULL) (*return_plus_one)++;
+	return NULL;
 }
 
 ///////////////////////////////////////////////
