@@ -136,6 +136,7 @@ vector<wstring>			findfiles(wstring filePath, wstring fileFormat);
 BOOL					modify_file_text(string file_name, wstring start_str, wstring end_str, wstring new_text);
 wstring					read_file_text(string file_name, wstring start_str, wstring end_str);
 void*					count_down_show(int seconds, HWND hDlg, int nIDDlgItem, LPCWSTR lpString_front, LPCWSTR lpString_back, int* return_plus_one);
+json					GetElementPosition(IUIAutomationElement* element, CComPtr<IUIAutomation> automation);
 string                  GetRegValue(int nKeyType, const string& strUrl, const string& strKey);
 BOOL                    SetRegValue_REG_DWORD(int nKeyType, const string& strUrl, const string& strKey, const DWORD& dwValue);
 string                  midstr(string str, PCSTR start, PCSTR end);

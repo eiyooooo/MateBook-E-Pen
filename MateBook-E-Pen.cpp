@@ -244,7 +244,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         }
 		case IDC_TEST:
 		{
-            capturing_WnE = FALSE;
+            capturing_WnE = 5;
 			break;
 		}
         case IDC_SAVE:
@@ -1644,6 +1644,39 @@ void* capture_Element()
                 }
                 break;
             }
+            case 5:
+            {
+                map<IUIAutomationElement*, json> positions;
+                wstring aaa;
+                if (!ElementList1.empty())
+                {
+                    positions[ElementList1.back()] = GetElementPosition(ElementList1.back(), automation);
+                }
+                if (!ElementList2.empty())
+                {
+                    positions[ElementList2.back()] = GetElementPosition(ElementList2.back(), automation);
+                }
+                for (const auto& p : positions)
+                {
+                    wstring position_str = L"[";
+                    for (const auto& index : p.second)
+                    {
+                        position_str += to_wstring(index.get<int>()) + L", ";
+                    }
+                    if (position_str.size() > 1)
+                    {
+                        position_str.pop_back();
+                        position_str.pop_back();
+                    }
+                    position_str += L"]";
+
+                    aaa += position_str;
+                }
+                SetDlgItemText(hwnd_popup, IDC_S6, aaa.c_str());
+                EnableWindow(GetDlgItem(hwnd_popup, IDC_SAVE), TRUE);
+                capturing_WnE = 6;
+                break;
+            }
 			default:
                 Sleep(500);
 				break;
@@ -2366,14 +2399,58 @@ void* count_down_show(int seconds, HWND hDlg, int nIDDlgItem, LPCWSTR lpString_f
 	int i = seconds;
 	while (i > 0)
 	{
-		Sleep(1000);
 		wchar_t str[10];
 		wsprintf(str, L"%d", i);
-        i--;
 		SetDlgItemText(hDlg, nIDDlgItem, (lpString_front + wstring(str) + lpString_back).c_str());
+        Sleep(1000);
+        i--;
 	}
 	if (return_plus_one != NULL) (*return_plus_one)++;
 	return NULL;
+}
+
+// 获取指定元素到达路径
+json GetElementPosition(IUIAutomationElement* element, CComPtr<IUIAutomation> automation)
+{
+    vector<int> indices;
+	CComPtr<IUIAutomationElement> Element = element;
+    CComPtr<IUIAutomationTreeWalker> treeWalker;
+    automation->get_RawViewWalker(&treeWalker);
+    while (Element)
+    {
+        CComPtr<IUIAutomationElement> parentElement;
+        treeWalker->GetParentElement(Element, &parentElement);
+        if (!parentElement) break;
+		
+        CComPtr<IUIAutomationElement> childElement, siblingElement;
+        treeWalker->GetFirstChildElement(parentElement, &childElement);
+        int index = 1;
+
+        BOOL areElementsEqual;
+        while (childElement)
+        {
+            automation->CompareElements(Element, childElement, &areElementsEqual);
+            if (areElementsEqual) break;
+
+            treeWalker->GetNextSiblingElement(childElement, &siblingElement);
+            childElement = siblingElement;
+            index++;
+        }
+
+        indices.push_back(index);
+        Element = parentElement;
+    }
+	
+    indices.pop_back();
+    reverse(indices.begin(), indices.end());
+
+    json position = json::array();
+    for (const auto& index : indices)
+    {
+        position.push_back(index);
+    }
+
+    return position;
 }
 
 ///////////////////////////////////////////////
