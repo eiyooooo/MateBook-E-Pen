@@ -137,11 +137,16 @@ BOOL					modify_file_text(string file_name, wstring start_str, wstring end_str, 
 wstring					read_file_text(string file_name, wstring start_str, wstring end_str);
 void*					count_down_show(int seconds, HWND hDlg, int nIDDlgItem, LPCWSTR lpString_front, LPCWSTR lpString_back, int* return_plus_one);
 json					GetElementPosition(IUIAutomationElement* element, CComPtr<IUIAutomation> automation);
+bool					IsInvokePatternAvailable(IUIAutomationElement* element);
+bool					IfElementIsSelected(IUIAutomationElement* pElement);
+HRESULT					InvokeElement(HWND hwnd, CComPtr<IUIAutomationElement> Element, CComPtr<IUIAutomation> automation);
+CComPtr<IUIAutomationElement> FindElementByPosition(HWND hwnd, IUIAutomationElement* element, CComPtr<IUIAutomation> automation, const json& position, size_t currentIndex = 0);
 string                  GetRegValue(int nKeyType, const string& strUrl, const string& strKey);
 BOOL                    SetRegValue_REG_DWORD(int nKeyType, const string& strUrl, const string& strKey, const DWORD& dwValue);
 string                  midstr(string str, PCSTR start, PCSTR end);
 string                  wstring2string(const wstring& ws);
 wstring                 string2wstring(const string& s);
+string					BSTR2string(const BSTR bstr);
 BOOL                    get_if_dark();
 void                    switch_dark(BOOL if_dark);
 HRESULT                 check_update();

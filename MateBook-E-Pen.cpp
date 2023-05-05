@@ -249,7 +249,14 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 		}
         case IDC_SAVE:
         {
-			capturing_WnE = FALSE;
+            if (capturing_WnE == 6)
+            {
+                capturing_WnE = 7;
+            }
+            else
+            {
+                capturing_WnE = FALSE;
+            }
             KillTimer(hDlg, 1);
             KillTimer(hDlg, 2);
             KillTimer(hDlg, 3);
@@ -1415,13 +1422,13 @@ void* main_thread()
                 {
                     if (writing == true)
                     {
-                        Sleep(100);
+                        Sleep(10);
                         keybd_event(0x31, 0, 0, 0);
                         writing = false;
                     }
                     else
                     {
-                        Sleep(100);
+                        Sleep(10);
                         keybd_event(0x32, 0, 0, 0);
                         writing = true;
                     }
@@ -1532,7 +1539,8 @@ void* capture_Element()
     vector<CComPtr<IUIAutomationElement>> ElementList1, ElementList2;
 	UIA_HWND window_hwnd1 = nullptr, window_hwnd2 = nullptr;
 	HWND window_Hwnd1 = nullptr, window_Hwnd2 = nullptr;
-    BSTR window_name, Element1_name, Element2_name;
+    BSTR window_name = nullptr, Element1_name = nullptr, Element2_name = nullptr;
+    json test_data;
 	
     while (1)
     {
@@ -1622,14 +1630,22 @@ void* capture_Element()
             }
             case 3:
             {
-                if ((window_hwnd1 != window_hwnd2 || window_hwnd1 != window_Hwnd1 ||
+                BOOL areElementsEqual;
+                automation->CompareElements(ElementList1.back(), ElementList2.back(), &areElementsEqual);
+                bool isInvokePatternAvailable1 = IsInvokePatternAvailable(ElementList1.back());
+				bool isInvokePatternAvailable2 = IsInvokePatternAvailable(ElementList2.back());
+                if (window_hwnd1 != window_hwnd2 || window_hwnd1 != window_Hwnd1 ||
                     window_hwnd1 != window_Hwnd2 || window_hwnd2 != window_Hwnd1 ||
                     window_hwnd2 != window_Hwnd2 || window_Hwnd1 != window_Hwnd2 ||
-                    window_Hwnd1 == inst_hwnd || window_Hwnd2 == inst_hwnd))
+                    window_Hwnd1 == inst_hwnd || window_Hwnd2 == inst_hwnd ||
+					areElementsEqual || !isInvokePatternAvailable1 || !isInvokePatternAvailable2)
                 {
                     capturing_WnE = -1;
+					ElementList1.clear();
+					ElementList2.clear();
                     SetDlgItemText(hwnd_popup, IDC_S6, L"当前控件组合不支持，请重新捕获");
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
                     SetDlgItemText(hwnd_popup, IDC_WINDOW, L"未获取");
                     SetDlgItemText(hwnd_popup, IDC_PEN, L"未获取");
                     SetDlgItemText(hwnd_popup, IDC_ERASER, L"未获取");
@@ -1638,7 +1654,7 @@ void* capture_Element()
                 else
                 {
                     capturing_WnE = 4;
-                    SetDlgItemText(hwnd_popup, IDC_S6, L"捕获完成，请手动删除窗口名称中含有的文件名(如有)");
+                    SetDlgItemText(hwnd_popup, IDC_S6, L"捕获完成，请手动删除窗口名称中含有的文件名(如有)，再进行测试");
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_WINDOW), TRUE);
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), TRUE);
                 }
@@ -1646,35 +1662,66 @@ void* capture_Element()
             }
             case 5:
             {
-                map<IUIAutomationElement*, json> positions;
-                wstring aaa;
+                json ElementPosition1, ElementPosition2;
                 if (!ElementList1.empty())
                 {
-                    positions[ElementList1.back()] = GetElementPosition(ElementList1.back(), automation);
+                    ElementPosition1 = GetElementPosition(ElementList1.back(), automation);
                 }
                 if (!ElementList2.empty())
                 {
-                    positions[ElementList2.back()] = GetElementPosition(ElementList2.back(), automation);
+                    ElementPosition2 = GetElementPosition(ElementList2.back(), automation);
                 }
-                for (const auto& p : positions)
+				
+                EnableWindow(GetDlgItem(hwnd_popup, IDC_WINDOW), FALSE);
+				wstring WindowName(window_name, SysStringLen(window_name));
+				GetDlgItemText(hwnd_popup, IDC_WINDOW, (LPWSTR)WindowName.c_str(), 100);
+				window_name = SysAllocStringLen(WindowName.c_str(), WindowName.length());
+                test_data["pen_and_eraser_save"][BSTR2string(window_name)] =
                 {
-                    wstring position_str = L"[";
-                    for (const auto& index : p.second)
+                    {BSTR2string(Element1_name), ElementPosition1},
+                    {BSTR2string(Element2_name), ElementPosition2}
+                };
+				
+                SetForegroundWindow(window_Hwnd1);
+                Sleep(100);
+                CComPtr<IUIAutomationElement> testElement1 = FindElementByPosition(window_Hwnd1, nullptr, automation, test_data["pen_and_eraser_save"].back().front());
+                bool isInvokePatternAvailable1 = IsInvokePatternAvailable(testElement1), IsSelected1 = false, IsSelected2 = false;
+                if (isInvokePatternAvailable1)
+                {
+                    InvokeElement(window_Hwnd1, testElement1, automation);
+                    Sleep(100);
+                    IsSelected1 = IfElementIsSelected(testElement1);
+                    Sleep(1000);
+                    CComPtr<IUIAutomationElement> testElement2 = FindElementByPosition(window_Hwnd1, nullptr, automation, test_data["pen_and_eraser_save"].back().back());
+                    bool isInvokePatternAvailable2 = IsInvokePatternAvailable(testElement2);
+                    if (isInvokePatternAvailable2)
                     {
-                        position_str += to_wstring(index.get<int>()) + L", ";
+                        InvokeElement(window_Hwnd1, testElement2, automation);
+                        Sleep(100);
+                        IsSelected2 = IfElementIsSelected(testElement2);
                     }
-                    if (position_str.size() > 1)
-                    {
-                        position_str.pop_back();
-                        position_str.pop_back();
-                    }
-                    position_str += L"]";
-
-                    aaa += position_str;
                 }
-                SetDlgItemText(hwnd_popup, IDC_S6, aaa.c_str());
-                EnableWindow(GetDlgItem(hwnd_popup, IDC_SAVE), TRUE);
-                capturing_WnE = 6;
+
+                if (!IsSelected1 || !IsSelected2)
+                {
+                    capturing_WnE = -1;
+                    ElementList1.clear();
+                    ElementList2.clear();
+                    SetDlgItemText(hwnd_popup, IDC_S6, L"当前控件组合不支持，请重新捕获");
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
+                    SetDlgItemText(hwnd_popup, IDC_WINDOW, L"未获取");
+                    SetDlgItemText(hwnd_popup, IDC_PEN, L"未获取");
+                    SetDlgItemText(hwnd_popup, IDC_ERASER, L"未获取");
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_SAVE), TRUE);
+                }
+                else
+                {
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_SAVE), TRUE);
+                    SetDlgItemText(hwnd_popup, IDC_S6, L"测试通过，请保存");
+                    SetDlgItemText(hwnd_popup, IDC_SAVE, L"保存并关闭");
+                    capturing_WnE = 6;
+                }
                 break;
             }
 			default:
@@ -1684,6 +1731,12 @@ void* capture_Element()
         }
         else
         {
+            if (capturing_WnE == 7)
+            {
+                config_data["pen_and_eraser_save"][BSTR2string(window_name)] = test_data["pen_and_eraser_save"][BSTR2string(window_name)];
+                test_data.clear();
+                break;
+            }
             capturing_WnE == FALSE;
             CoUninitialize();
             return 0;
@@ -2453,6 +2506,100 @@ json GetElementPosition(IUIAutomationElement* element, CComPtr<IUIAutomation> au
     return position;
 }
 
+// 检查能否触发元素关联操作
+bool IsInvokePatternAvailable(IUIAutomationElement* element)
+{
+    if (element == nullptr) return false;
+	
+    HRESULT hr;
+    VARIANT isInvokePatternAvailableVariant;
+	
+    hr = element->GetCurrentPropertyValue(UIA_IsInvokePatternAvailablePropertyId, &isInvokePatternAvailableVariant);
+    if (FAILED(hr)) return false;
+
+    bool isInvokePatternAvailable = isInvokePatternAvailableVariant.boolVal == VARIANT_TRUE;
+    VariantClear(&isInvokePatternAvailableVariant);
+
+    return isInvokePatternAvailable;
+}
+
+// 检查元素是否被选择
+bool IfElementIsSelected(IUIAutomationElement* element)
+{
+    if (element == nullptr) return false;
+
+    HRESULT hr;
+    ISelectionItemProvider* ISelectionItemProvider = nullptr;
+    hr = element->GetCurrentPattern(UIA_SelectionItemPatternId, reinterpret_cast<IUnknown**>(&ISelectionItemProvider));
+    if (FAILED(hr) || ISelectionItemProvider == nullptr) return false;
+
+    BOOL isSelected;
+    hr = ISelectionItemProvider->get_IsSelected(&isSelected);
+    if (FAILED(hr))
+    {
+        ISelectionItemProvider->Release();
+        return false;
+    }
+
+    ISelectionItemProvider->Release();
+    return isSelected == TRUE;
+}
+
+// 触发元素关联操作
+HRESULT InvokeElement(HWND hwnd, CComPtr<IUIAutomationElement> Element, CComPtr<IUIAutomation> automation)
+{
+    if (Element == nullptr) return E_FAIL;
+    CComPtr<IUIAutomationInvokePattern> invokePattern;
+    hr = Element->GetCurrentPatternAs(UIA_InvokePatternId, IID_PPV_ARGS(&invokePattern));
+    if (FAILED(hr)) return hr;
+    return invokePattern->Invoke();
+}
+
+// 通过到达路径寻找元素
+CComPtr<IUIAutomationElement> FindElementByPosition(HWND hwnd, IUIAutomationElement* element, CComPtr<IUIAutomation> automation, const json& position, size_t currentIndex)
+{
+    if (hwnd != NULL && element == nullptr)
+    {
+        HRESULT hr = automation->ElementFromHandle(hwnd, &element);
+        if (FAILED(hr)) return nullptr;
+    }
+	
+    if (currentIndex >= position.size()) return nullptr;
+
+    CComPtr<IUIAutomationTreeWalker> treeWalker;
+    HRESULT hr = automation->get_RawViewWalker(&treeWalker);
+    if (FAILED(hr)) return nullptr;
+
+    CComPtr<IUIAutomationElement> childElement, siblingElement;
+    hr = treeWalker->GetFirstChildElement(element, &childElement);
+    if (FAILED(hr)) return nullptr;
+
+    int index = 1;
+    while (childElement)
+    {
+        if (index == position[currentIndex].get<int>())
+        {
+            if (currentIndex == position.size() - 1)
+            {
+                return childElement;
+            }
+            else
+            {
+                CComPtr<IUIAutomationElement> foundElement = FindElementByPosition(NULL, childElement, automation, position, currentIndex + 1);
+                if (foundElement) return foundElement;
+            }
+        }
+
+        hr = treeWalker->GetNextSiblingElement(childElement, &siblingElement);
+        if (FAILED(hr)) return nullptr;
+
+        childElement = siblingElement;
+        index++;
+    }
+
+    return nullptr;
+}
+
 ///////////////////////////////////////////////
 /////////////////             /////////////////
 /////////////////   检查更新   /////////////////
@@ -2936,5 +3083,14 @@ wstring string2wstring(const string& s)
     _bstr_t t = s.c_str();
     wchar_t* pwchar = (wchar_t*)t;
     wstring result = pwchar;
+    return result;
+}
+
+string BSTR2string(const BSTR bstr)
+{
+    if (!bstr) return "";
+    int len = WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
+    string result(len - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr, nullptr);
     return result;
 }
