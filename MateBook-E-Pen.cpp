@@ -48,6 +48,7 @@ void init(HWND hWnd)
     config_file_path = current_path / "MateBook-E-Pen.json";
     vector<pair<string, json>> default_data =
     {
+        {"float_mode", true},
         {"default_mode", 1},
         {"auto_popup", true},
         {"pen_and_eraser_save", json::object()}
@@ -57,6 +58,7 @@ void init(HWND hWnd)
         config_data = read_config(config_file_path);
     }
 	ensure_config_valid(config_data, default_data);
+    float_mode = config_data["float_mode"];
 	default_mode = config_data["default_mode"];
 	auto_popup = config_data["auto_popup"];
     thread tid3(monitor_config_change);
@@ -188,6 +190,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         if (lParam == WM_RBUTTONDOWN)
         {
             default_mode_show_on_menu();
+            if (float_mode)
+            {
+                CheckMenuItem(hMenu, FLOAT_SWITCH, MF_CHECKED);
+            }
+            else
+            {
+                CheckMenuItem(hMenu, FLOAT_SWITCH, MF_UNCHECKED);
+            }
             IconRightClick(hWnd, message, wParam, lParam);
         }
     break;
@@ -227,7 +237,6 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
             EnableWindow(GetDlgItem(hDlg, IDC_SAVE), FALSE);
             EnableWindow(GetDlgItem(hDlg, IDC_START), FALSE);
             EnableWindow(GetDlgItem(hDlg, IDC_TEST), FALSE);
-            SetDlgItemText(hwnd_popup, IDC_WINDOW, L"");
             SetDlgItemText(hDlg, IDC_S10, L"");
             KillTimer(hDlg, 1);
             KillTimer(hDlg, 2);
@@ -239,6 +248,12 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
                 thread tid1(capture_Element);
                 tid1.detach();
             }
+			else
+			{
+                SetDlgItemText(hwnd_popup, IDC_WINDOW, L"未获取");
+                SetDlgItemText(hwnd_popup, IDC_PEN, L"未获取");
+                SetDlgItemText(hwnd_popup, IDC_ERASER, L"未获取");
+			}
             capturing_WnE = 1;
             break;
         }
@@ -286,7 +301,6 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         SetTimer(hDlg, 2, 2000, NULL);
 		SetTimer(hDlg, 1, 1000, NULL);
         if (!auto_popup) SendDlgItemMessage(hDlg, IDC_CHECK1, BM_SETCHECK, BST_CHECKED, 0);
-        SetDlgItemText(hDlg, IDC_WINDOW, L"未获取");
         capturing_WnE = FALSE;
 		break;
     case WM_TIMER:
@@ -435,7 +449,7 @@ void Change_Icon()
             nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
             state = IDI_WnE;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
-            if (float_mode == TRUE) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
+            if (float_mode) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
             if_used = 0;
             break;
         }
@@ -445,7 +459,7 @@ void Change_Icon()
             nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_SCREENSHOT));
             state = IDI_SCREENSHOT;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
-            if (float_mode == TRUE) UpdateFloat(idb_SCREENSHOT, inst_hwnd, 0, 0);
+            if (float_mode) UpdateFloat(idb_SCREENSHOT, inst_hwnd, 0, 0);
             if_used = 0;
             switch_back = TRUE;
             break;
@@ -458,14 +472,14 @@ void Change_Icon()
                 nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_NOTE));
                 state = IDI_NOTE;
                 Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_NOTE, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_NOTE, inst_hwnd, 0, 0);
             }
             else
             {
                 nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
                 state = IDI_PASTE;
                 Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
             }
             if_used = 0;
             switch_back = TRUE;
@@ -479,14 +493,14 @@ void Change_Icon()
                 nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
                 state = IDI_COPY;
                 Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_COPY, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_COPY, inst_hwnd, 0, 0);
             }
             else
             {
                 nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
                 state = IDI_PASTE;
                 Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
             }
             if_used = 0;
             switch_back = TRUE;
@@ -498,7 +512,7 @@ void Change_Icon()
             nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_PASTE));
             state = IDI_PASTE;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
-            if (float_mode == TRUE) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
+            if (float_mode) UpdateFloat(idb_PASTE, inst_hwnd, 0, 0);
             if_used = 0;
             switch_back = TRUE;
             break;
@@ -511,42 +525,42 @@ void Change_Icon()
                 nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_UNDO));
                 state = IDI_UNDO;
                 Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_UNDO, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_UNDO, inst_hwnd, 0, 0);
             }
             else if (default_mode == 1)
             {
                 nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
                 state = IDI_WnE;
                 Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
             }
             else if (default_mode == 2)
             {
                 nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_SCREENSHOT));
                 state = IDI_SCREENSHOT;
                 Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_SCREENSHOT, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_SCREENSHOT, inst_hwnd, 0, 0);
             }
 			else if (default_mode == 3)
 			{
 				nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_NOTE));
 				state = IDI_NOTE;
 				Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_NOTE, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_NOTE, inst_hwnd, 0, 0);
 			}
 			else if (default_mode == 4)
 			{
 				nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_COPY));
 				state = IDI_COPY;
 				Shell_NotifyIcon(NIM_MODIFY, &nid);
-                if (float_mode == TRUE) UpdateFloat(idb_COPY, inst_hwnd, 0, 0);
+                if (float_mode) UpdateFloat(idb_COPY, inst_hwnd, 0, 0);
 			}
 			else if (default_mode == 5)
 			{
 				nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_UNDO));
 				state = IDI_UNDO;
 				Shell_NotifyIcon(NIM_MODIFY, &nid);
-				if (float_mode == TRUE) UpdateFloat(idb_UNDO, inst_hwnd, 0, 0);
+				if (float_mode) UpdateFloat(idb_UNDO, inst_hwnd, 0, 0);
             }
             if_used = 0;
             switch_back = TRUE;
@@ -557,7 +571,7 @@ void Change_Icon()
             nid.hIcon = LoadIcon(GetModuleHandle(0), MAKEINTRESOURCE(idi_WnE));
             state = IDI_WnE;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
-            if (float_mode == TRUE) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
+            if (float_mode) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
             if_used = 0;
             switch_back = TRUE;
             break;
@@ -702,6 +716,14 @@ void FloatMouse(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_RBUTTONDOWN:
         {
             default_mode_show_on_menu();
+            if (float_mode)
+            {
+                CheckMenuItem(hMenu, FLOAT_SWITCH, MF_CHECKED);
+            }
+            else
+            {
+                CheckMenuItem(hMenu, FLOAT_SWITCH, MF_UNCHECKED);
+            }
             IconRightClick(hWnd, message, wParam, lParam);
             break;
         }
@@ -733,10 +755,10 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     }
     if (clicked == FLOAT_SWITCH)
     {
-        if (float_mode == FALSE)
+        if (!float_mode)
         {
-            CheckMenuItem(hMenu, FLOAT_SWITCH, MF_CHECKED);
-            float_mode = TRUE;
+            float_mode = true;
+            config_data["float_mode"] = float_mode;
             switch (state)
             {
             case IDI_WnE:
@@ -762,8 +784,8 @@ void IconRightClick(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
 		else
 		{
-			CheckMenuItem(hMenu, FLOAT_SWITCH, MF_UNCHECKED);
-            float_mode = FALSE;
+            float_mode = false;
+            config_data["float_mode"] = float_mode;
 			UpdateFloat(nullptr, inst_hwnd, 0, 0);
 		}
     }
@@ -1539,7 +1561,8 @@ void* capture_Element()
     vector<CComPtr<IUIAutomationElement>> ElementList1, ElementList2;
 	UIA_HWND window_hwnd1 = nullptr, window_hwnd2 = nullptr;
 	HWND window_Hwnd1 = nullptr, window_Hwnd2 = nullptr;
-    BSTR window_name = nullptr, Element1_name = nullptr, Element2_name = nullptr;
+    BSTR Element1_name = nullptr, Element2_name = nullptr;
+    string ProcessName;
     json test_data;
 	
     while (1)
@@ -1553,6 +1576,8 @@ void* capture_Element()
                 thread tid1(count_down_show, 5, hwnd_popup, IDC_S6, L"请将光标放在控件1的上方，", L"秒后结束捕获", &capturing_WnE);
                 tid1.detach();
 
+                ElementList1.clear();
+                ElementList2.clear();
                 while (capturing_WnE == 1)
                 {
                     POINT cursor;
@@ -1573,20 +1598,18 @@ void* capture_Element()
                 if (ElementList1.size() == 1)
                 {
                     ElementList1[0]->get_CurrentNativeWindowHandle(&window_hwnd1);
-                    ElementList1[0]->get_CurrentName(&window_name);
                 }
                 else
                 {
                     ElementList1[1]->get_CurrentNativeWindowHandle(&window_hwnd1);
-                    ElementList1[1]->get_CurrentName(&window_name);
                 }
                 SetForegroundWindow((HWND)window_hwnd1);
                 Sleep(100);
 
                 window_Hwnd1 = GetForegroundWindow();
-                wstring WindowName(window_name, SysStringLen(window_name));
-                SetDlgItemText(hwnd_popup, IDC_WINDOW, WindowName.c_str());
-
+                ProcessName = GetProcessNameByHwnd(window_Hwnd1);
+                SetDlgItemTextA(hwnd_popup, IDC_WINDOW, ProcessName.c_str());
+				
                 count_down_show(3, hwnd_popup, IDC_S6, L"已捕获控件1，", L"秒后继续", NULL);
                 break;
             }
@@ -1615,12 +1638,10 @@ void* capture_Element()
                 if (ElementList2.size() == 1)
                 {
                     ElementList2[0]->get_CurrentNativeWindowHandle(&window_hwnd2);
-                    ElementList2[0]->get_CurrentName(&window_name);
                 }
                 else
                 {
                     ElementList2[1]->get_CurrentNativeWindowHandle(&window_hwnd2);
-                    ElementList2[1]->get_CurrentName(&window_name);
                 }
                 SetForegroundWindow((HWND)window_hwnd2);
                 Sleep(100);
@@ -1641,8 +1662,6 @@ void* capture_Element()
 					areElementsEqual || !isInvokePatternAvailable1 || !isInvokePatternAvailable2)
                 {
                     capturing_WnE = -1;
-					ElementList1.clear();
-					ElementList2.clear();
                     SetDlgItemText(hwnd_popup, IDC_S6, L"当前控件组合不支持，请重新捕获");
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
@@ -1655,7 +1674,6 @@ void* capture_Element()
                 {
                     capturing_WnE = 4;
                     SetDlgItemText(hwnd_popup, IDC_S6, L"捕获完成，请手动删除窗口名称中含有的文件名(如有)，再进行测试");
-                    EnableWindow(GetDlgItem(hwnd_popup, IDC_WINDOW), TRUE);
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), TRUE);
                 }
                 break;
@@ -1672,11 +1690,20 @@ void* capture_Element()
                     ElementPosition2 = GetElementPosition(ElementList2.back(), automation);
                 }
 				
-                EnableWindow(GetDlgItem(hwnd_popup, IDC_WINDOW), FALSE);
-				wstring WindowName(window_name, SysStringLen(window_name));
-				GetDlgItemText(hwnd_popup, IDC_WINDOW, (LPWSTR)WindowName.c_str(), 100);
-				window_name = SysAllocStringLen(WindowName.c_str(), WindowName.length());
-                test_data["pen_and_eraser_save"][BSTR2string(window_name)] =
+                if (ElementPosition1 == nullptr || ElementPosition2 == nullptr)
+                {
+                    capturing_WnE = -1;
+                    SetDlgItemText(hwnd_popup, IDC_S6, L"无法定位控件，请重新捕获");
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
+                    SetDlgItemText(hwnd_popup, IDC_WINDOW, L"未获取");
+                    SetDlgItemText(hwnd_popup, IDC_PEN, L"未获取");
+                    SetDlgItemText(hwnd_popup, IDC_ERASER, L"未获取");
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_SAVE), TRUE);
+                    break;
+                }
+				
+                test_data["pen_and_eraser_save"][ProcessName] =
                 {
                     {BSTR2string(Element1_name), ElementPosition1},
                     {BSTR2string(Element2_name), ElementPosition2}
@@ -1705,8 +1732,6 @@ void* capture_Element()
                 if (!IsSelected1 || !IsSelected2)
                 {
                     capturing_WnE = -1;
-                    ElementList1.clear();
-                    ElementList2.clear();
                     SetDlgItemText(hwnd_popup, IDC_S6, L"当前控件组合不支持，请重新捕获");
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
@@ -1717,7 +1742,9 @@ void* capture_Element()
                 }
                 else
                 {
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_SAVE), TRUE);
+                    SetDlgItemText(hwnd_popup, IDC_START, L"重新捕获");
                     SetDlgItemText(hwnd_popup, IDC_S6, L"测试通过，请保存");
                     SetDlgItemText(hwnd_popup, IDC_SAVE, L"保存并关闭");
                     capturing_WnE = 6;
@@ -1733,7 +1760,7 @@ void* capture_Element()
         {
             if (capturing_WnE == 7)
             {
-                config_data["pen_and_eraser_save"][BSTR2string(window_name)] = test_data["pen_and_eraser_save"][BSTR2string(window_name)];
+                config_data["pen_and_eraser_save"][ProcessName] = test_data["pen_and_eraser_save"][ProcessName];
                 test_data.clear();
                 break;
             }
@@ -2378,6 +2405,22 @@ BOOL killProcess(const wchar_t* program_name)
 	return ret;
 }
 
+// 通过句柄获取进程名
+string GetProcessNameByHwnd(HWND hwnd)
+{
+    DWORD processId;
+    GetWindowThreadProcessId(hwnd, &processId);
+
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processId);
+    if (hProcess == NULL) return "未能打开进程";
+
+    char processName[MAX_PATH] = "<unknown>";
+    GetModuleFileNameExA(hProcess, NULL, processName, sizeof(processName) / sizeof(char));
+
+    CloseHandle(hProcess);
+    return processName;
+}
+
 // 查找指定格式文件
 vector<wstring> findfiles(wstring filePath, wstring fileFormat)
 {
@@ -2494,6 +2537,7 @@ json GetElementPosition(IUIAutomationElement* element, CComPtr<IUIAutomation> au
         Element = parentElement;
     }
 	
+    if (indices.size() == 0) return nullptr;
     indices.pop_back();
     reverse(indices.begin(), indices.end());
 

@@ -15,6 +15,7 @@
 #include "vector"
 #include "filesystem"
 #include "nlohmann/json.hpp"
+#include "Psapi.h"
 
 using namespace std;
 using namespace ATL;
@@ -79,7 +80,7 @@ string update_info; 			  			    // 更新信息
 GdiplusStartupInput m_gdiplusStartupInput;		// GDI+初始化结构体
 ULONG_PTR m_pGdiToken;							// GDI+初始化标识符
 int default_mode = 1;							// 默认模式
-BOOL float_mode = TRUE;							// 悬浮球开关
+bool float_mode = true;							// 悬浮球开关
 bool auto_popup = true;							// 是否自动弹出笔/橡皮设置
 fs::path config_file_path;                      // 配置文件路径
 json config_data;                               // 配置文件数据
@@ -132,6 +133,7 @@ wstring                 getrole(CComPtr<IAccessible> acc, CComVariant varChild);
 wstring					getstate(CComPtr<IAccessible> acc, CComVariant varChild);
 BOOL					isProgramRunning(const wchar_t* program_name);
 BOOL					killProcess(const wchar_t* program_name);
+string					GetProcessNameByHwnd(HWND hwnd);
 vector<wstring>			findfiles(wstring filePath, wstring fileFormat);
 BOOL					modify_file_text(string file_name, wstring start_str, wstring end_str, wstring new_text);
 wstring					read_file_text(string file_name, wstring start_str, wstring end_str);

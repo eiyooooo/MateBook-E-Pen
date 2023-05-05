@@ -59,7 +59,6 @@
 #define FLOAT_SWITCH                    32781
 #define ID_32782                        32782
 #define ID_32783                        32783
-#define ID_Menu                         32784
 #define WnE_SET                         32785
 #define IDC_S6                          -1
 
