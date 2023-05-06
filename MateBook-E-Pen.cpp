@@ -230,10 +230,28 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         return (INT_PTR)Brush;
 
     case WM_COMMAND:
+        if (HIWORD(wParam) == LBN_SELCHANGE)
+        {
+            capturing_WnE = -5;
+            EnableWindow(GetDlgItem(hDlg, IDC_TEST), TRUE);
+            break;
+        }
+		
         switch (LOWORD(wParam))
         {
 		case IDC_START:
         {
+            if (capturing_WnE == -4 || capturing_WnE == -5)
+            {
+                ShowWindow(GetDlgItem(hDlg, IDC_LIST1), SW_HIDE);
+                ShowWindow(GetDlgItem(hDlg, IDC_S7), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_S8), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_S9), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_WINDOW), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_PEN), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_ERASER), SW_SHOW);
+                capturing_WnE = 0;
+            }
             EnableWindow(GetDlgItem(hDlg, IDC_SAVE), FALSE);
             EnableWindow(GetDlgItem(hDlg, IDC_START), FALSE);
             EnableWindow(GetDlgItem(hDlg, IDC_TEST), FALSE);
@@ -259,7 +277,50 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         }
 		case IDC_TEST:
 		{
-            capturing_WnE = 5;
+            if (capturing_WnE == 4) capturing_WnE = 5;
+            else if (capturing_WnE == -5)
+            {
+                int index = SendMessage(GetDlgItem(hDlg, IDC_LIST1), LB_GETCURSEL, 0, 0);
+				SendMessage(GetDlgItem(hDlg, IDC_LIST1), LB_DELETESTRING, index, 0);
+                int i = 0;
+                for (auto it = config_data["pen_and_eraser_save"].begin(); it != config_data["pen_and_eraser_save"].end(); it++)
+                {
+                    if (i == index)
+                    {
+                        string key = it.key();
+                        config_data["pen_and_eraser_save"].erase(key);
+                    }
+                    i++;
+                }
+                EnableWindow(GetDlgItem(hDlg, IDC_TEST), FALSE);
+                capturing_WnE = -4;
+            }
+            else
+            {
+                capturing_WnE = -4;
+                KillTimer(hDlg, 1);
+                KillTimer(hDlg, 2);
+                KillTimer(hDlg, 3);
+                KillTimer(hDlg, 4);
+                KillTimer(hDlg, 5);
+                SetDlgItemText(hDlg, IDC_S6, L"已捕获控件程序列表");
+                SetDlgItemText(hDlg, IDC_S10, L"");
+                SetDlgItemText(hDlg, IDC_TEST, L"删除");
+                EnableWindow(GetDlgItem(hDlg, IDC_TEST), FALSE);
+				ShowWindow(GetDlgItem(hDlg, IDC_LIST1), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_S7), SW_HIDE);
+				ShowWindow(GetDlgItem(hDlg, IDC_S8), SW_HIDE);
+				ShowWindow(GetDlgItem(hDlg, IDC_S9), SW_HIDE);
+				ShowWindow(GetDlgItem(hDlg, IDC_WINDOW), SW_HIDE);
+				ShowWindow(GetDlgItem(hDlg, IDC_PEN), SW_HIDE);
+				ShowWindow(GetDlgItem(hDlg, IDC_ERASER), SW_HIDE);
+                for (auto it = config_data["pen_and_eraser_save"].begin(); it != config_data["pen_and_eraser_save"].end(); it++)
+                {
+                    string key = it.key();
+					string name = key.substr(key.find_last_of('\\', key.find_last_of('\\') - 1) + 1, key.length() - key.find_last_of('\\', key.find_last_of('\\') - 1) - 1);
+					SendMessageA(GetDlgItem(hDlg, IDC_LIST1), LB_ADDSTRING, 0, (LPARAM)name.c_str());
+                }
+            }
 			break;
 		}
         case IDC_SAVE:
@@ -301,6 +362,9 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         SetTimer(hDlg, 2, 2000, NULL);
 		SetTimer(hDlg, 1, 1000, NULL);
         if (!auto_popup) SendDlgItemMessage(hDlg, IDC_CHECK1, BM_SETCHECK, BST_CHECKED, 0);
+        if (capturing_WnE == -2) SetDlgItemText(hwnd_popup, IDC_S6, L"当前程序未捕获控件，请捕获控件1和控件2");
+        if (capturing_WnE == -3) SetDlgItemText(hwnd_popup, IDC_S6, L"当前程序无法重新定位到捕获控件，请捕获重新控件1和控件2");
+        if (config_data["pen_and_eraser_save"].size() > 0) EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), TRUE);
         capturing_WnE = FALSE;
 		break;
     case WM_TIMER:
@@ -1316,6 +1380,9 @@ void* main_thread()
     vector<CComPtr<IAccessible>> acc;
     IAcc_Located onenote_located;
     hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    CComPtr<IUIAutomation> automation;
+    hr = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_IUIAutomation, (void**)&automation);
+    json test_data;
 	
     while (1)
     {
@@ -1437,6 +1504,11 @@ void* main_thread()
                         }
                     }
                     vector<CComPtr<IAccessible>>().swap(acc);
+					
+                    if_used++;
+                    if (if_used <= 0) break;
+                    BUTTON = FALSE;
+                    break;
                 }
 				
 				// Drawboard PDF
@@ -1454,11 +1526,51 @@ void* main_thread()
                         keybd_event(0x32, 0, 0, 0);
                         writing = true;
                     }
+					
+                    BUTTON = FALSE;
+                    break;
                 }
-				
-                if_used++;
-                if (if_used <= 0) break;
-                BUTTON = FALSE;
+
+				string CurrentProcessName = GetProcessNameByHwnd(hwnd_current);
+                if (config_data["pen_and_eraser_save"].contains(CurrentProcessName))
+                {
+                    test_data["pen_and_eraser_save"][CurrentProcessName] = config_data["pen_and_eraser_save"][CurrentProcessName];
+                    CComPtr<IUIAutomationElement> testElement1 = FindElementByPosition(hwnd_current, nullptr, automation, test_data["pen_and_eraser_save"].back().front());
+                    CComPtr<IUIAutomationElement> testElement2 = FindElementByPosition(hwnd_current, nullptr, automation, test_data["pen_and_eraser_save"].back().back());
+                    
+                    bool isInvokePatternAvailable1 = IsInvokePatternAvailable(testElement1), IsSelected1 = false;
+                    bool isInvokePatternAvailable2 = IsInvokePatternAvailable(testElement2), IsSelected2 = false;
+                    if (isInvokePatternAvailable1 && isInvokePatternAvailable2)
+                    {
+                        IsSelected1 = IfElementIsSelected(testElement1);
+                        IsSelected2 = IfElementIsSelected(testElement2);
+                        if (IsSelected1 && !IsSelected2)
+                        {
+                            InvokeElement(hwnd_current, testElement2, automation);
+                        }
+                        else if (!IsSelected1 && !IsSelected2 || !IsSelected1 && IsSelected2)
+                        {
+                            InvokeElement(hwnd_current, testElement1, automation);
+                        }
+                        Sleep(10);
+						SetForegroundWindow(hwnd_current);
+                    }
+                    else if (auto_popup)
+                    {
+                        capturing_WnE = -3;
+                        DialogBox(hInst, MAKEINTRESOURCE(IDD_POPUP), inst_hwnd, popup);
+                    }
+					
+                    BUTTON = FALSE;
+                    break;
+                }
+
+                if (auto_popup)
+                {
+                    capturing_WnE = -2;
+                    DialogBox(hInst, MAKEINTRESOURCE(IDD_POPUP), inst_hwnd, popup);
+                    BUTTON = FALSE;
+                }
             }
             break;
         }
@@ -1575,6 +1687,8 @@ void* capture_Element()
             {
                 thread tid1(count_down_show, 5, hwnd_popup, IDC_S6, L"请将光标放在控件1的上方，", L"秒后结束捕获", &capturing_WnE);
                 tid1.detach();
+                SetDlgItemText(hwnd_popup, IDC_TEST, L"测试");
+				EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
 
                 ElementList1.clear();
                 ElementList2.clear();
@@ -1673,7 +1787,7 @@ void* capture_Element()
                 else
                 {
                     capturing_WnE = 4;
-                    SetDlgItemText(hwnd_popup, IDC_S6, L"捕获完成，请手动删除窗口名称中含有的文件名(如有)，再进行测试");
+                    SetDlgItemText(hwnd_popup, IDC_S6, L"捕获完成，请开始测试");
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), TRUE);
                 }
                 break;
@@ -1762,10 +1876,10 @@ void* capture_Element()
             {
                 config_data["pen_and_eraser_save"][ProcessName] = test_data["pen_and_eraser_save"][ProcessName];
                 test_data.clear();
-                break;
             }
             capturing_WnE == FALSE;
             CoUninitialize();
+            SetForegroundWindow(window_Hwnd1);
             return 0;
         }
     }
