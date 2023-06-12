@@ -1,7 +1,7 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "2.0.0"
+#define version "2.0.1"
 #define dev_mode false
 
 /////////////////////////////////////////////
@@ -514,6 +514,7 @@ void Change_Icon()
             state = IDI_WnE;
             Shell_NotifyIcon(NIM_MODIFY, &nid);
             if (float_mode) UpdateFloat(idb_WnE, inst_hwnd, 0, 0);
+			else UpdateFloat(nullptr, inst_hwnd, 0, 0);
             if_used = 0;
             break;
         }
