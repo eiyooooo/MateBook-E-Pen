@@ -1,7 +1,7 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "2.0.1"
+#define version "2.1.0"
 #define dev_mode false
 
 /////////////////////////////////////////////
@@ -1380,6 +1380,7 @@ void* main_thread()
 	bool writing = true;
     vector<CComPtr<IAccessible>> acc;
     IAcc_Located onenote_located;
+    IAcc_Located nebo_located;
     hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     CComPtr<IUIAutomation> automation;
     hr = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_IUIAutomation, (void**)&automation);
@@ -1406,6 +1407,7 @@ void* main_thread()
                         || getname(onenote_located.acc_pen, CHILDID_SELF).find(onenote_located.acc_pen_name) == string::npos)
                     {
                         onenote_located.hwnd_current = hwnd_current;
+                        vector<CComPtr<IAccessible>>().swap(acc);
                         acc.push_back(nullptr);
                         HWND hwnd_child = FindWindowEx(hwnd_current, NULL, L"Windows.UI.Core.CoreWindow", NULL);
                         hr = AccessibleObjectFromWindow(hwnd_child, OBJID_WINDOW, IID_IAccessible, (void**)&acc[0]); //0
@@ -1467,15 +1469,15 @@ void* main_thread()
                                 noselect = false;
                             }
                         }
-						vector<CComPtr<IAccessible>>().swap(all_pen);
+                        vector<CComPtr<IAccessible>>().swap(all_pen);
                     }
-					//储存对象名称
+                    //储存对象名称
                     onenote_located.acc_eraser_name = getname(onenote_located.acc_eraser, CHILDID_SELF);
                     onenote_located.acc_pen_name = getname(onenote_located.acc_pen, CHILDID_SELF);
                     if (onenote_located.acc_eraser_name.find(L"橡皮擦") == string::npos
                         || onenote_located.acc_pen_name.find(L"笔:") == string::npos) if_used = -1;
                     //获取当前工具状态并切换工具
-					CComVariant eraser_state, pen_state;
+                    CComVariant eraser_state, pen_state;
                     if (onenote_located.acc_eraser == nullptr)if_used = -1;
                     if (onenote_located.acc_pen == nullptr) if_used = -1;
                     if (if_used >= 0)
@@ -1490,13 +1492,13 @@ void* main_thread()
                         {
                             onenote_located.acc_pen->accDoDefaultAction(CComVariant(0));
                         }
-						else if (pen_state.lVal == 3146754 || getstate(onenote_located.acc_pen, CHILDID_SELF).find(L"已选择") != string::npos)
+                        else if (pen_state.lVal == 3146754 || getstate(onenote_located.acc_pen, CHILDID_SELF).find(L"已选择") != string::npos)
                         {
                             onenote_located.acc_eraser->accDoDefaultAction(CComVariant(0));
                         }
                         else
                         {
-							if_used = -1;
+                            if_used = -1;
                             if (noselect == true)
                             {
                                 onenote_located.acc_eraser->accDoDefaultAction(CComVariant(0));
@@ -1505,14 +1507,14 @@ void* main_thread()
                         }
                     }
                     vector<CComPtr<IAccessible>>().swap(acc);
-					
+
                     if_used++;
                     if (if_used <= 0) break;
                     BUTTON = FALSE;
                     break;
                 }
-				
-				// Drawboard PDF
+
+                // Drawboard PDF
                 if (StrStrA(title, "Drawboard PDF") != NULL)
                 {
                     if (writing == true)
@@ -1527,7 +1529,67 @@ void* main_thread()
                         keybd_event(0x32, 0, 0, 0);
                         writing = true;
                     }
-					
+
+                    BUTTON = FALSE;
+                    break;
+                }
+
+                // Nebo
+                if (StrStrA(title, "Nebo") != NULL)
+                {
+                    if (nebo_located.hwnd_current != hwnd_current || acc.size() == 0
+                        || nebo_located.acc_eraser == nullptr || nebo_located.acc_pen == nullptr)
+                    {
+                        nebo_located.hwnd_current = hwnd_current;
+                        vector<CComPtr<IAccessible>>().swap(acc);
+                        acc.push_back(nullptr);
+                        HWND hwnd_child = FindWindowEx(hwnd_current, NULL, L"Windows.UI.Core.CoreWindow", NULL);
+                        hr = AccessibleObjectFromWindow(hwnd_child, OBJID_WINDOW, IID_IAccessible, (void**)&acc[0]); //0
+                        acc.push_back(findchild(acc[acc.size() - 1], L"Nebo", 1)); //1
+                        //定位橡皮擦
+                        nebo_located.acc_eraser = findchild_which(acc[acc.size() - 1], 30); //2
+                        //定位笔
+                        nebo_located.acc_pen = findchild_which(acc[acc.size() - 1], 28); //3
+                        if (nebo_located.acc_eraser == acc[acc.size() - 1] && nebo_located.acc_pen == acc[acc.size() - 1])
+                        {
+                            nebo_located.acc_eraser = nullptr;
+                            nebo_located.acc_pen = nullptr;
+                            BUTTON = FALSE;
+                            break;
+                        }
+                    }
+
+                    if (writing == true)
+                    {
+                        nebo_located.acc_eraser->accDoDefaultAction(CComVariant(0));
+                        writing = false;
+                    }
+                    else
+                    {
+                        nebo_located.acc_pen->accDoDefaultAction(CComVariant(0));
+                        writing = true;
+                    }
+
+                    wstring check_name = getname(findchild_which(acc[acc.size() - 1], 1), CHILDID_SELF);
+                    if (check_name.find(L"Popup") != string::npos || check_name.find(L"弹出窗口") != string::npos)
+                    {
+                        acc.push_back(findchild_which(acc[acc.size() - 1], 2));
+                        acc.push_back(findchild_which(acc[acc.size() - 1], 1));
+                        acc[acc.size() - 1]->accDoDefaultAction(CComVariant(0));
+                        acc.pop_back();
+                        acc.pop_back();
+                        if (writing == true)
+                        {
+                            nebo_located.acc_eraser->accDoDefaultAction(CComVariant(0));
+                            writing = false;
+                        }
+                        else
+                        {
+                            nebo_located.acc_pen->accDoDefaultAction(CComVariant(0));
+                            writing = true;
+                        }
+                    }
+
                     BUTTON = FALSE;
                     break;
                 }
