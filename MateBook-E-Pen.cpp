@@ -1,8 +1,8 @@
 ﻿#include "framework.h"
 #include "MateBook-E-Pen.h"
 
-#define version "2.1.0"
-#define dev_mode false
+#define version "2.1.1"
+#define dev_mode true
 
 /////////////////////////////////////////////
 /////////////////           /////////////////
@@ -22,9 +22,25 @@ void init(HWND hWnd)
         hDll_PenService = LoadLibrary(L"C:\\Program Files\\Huawei\\PCManager\\components\\accessories_center\\accessories_app\\AccessoryApp\\Lib\\Plugins\\Depend\\PenService.dll");
 		if (hDll_PenService == NULL)
 		{
-			MessageBox(hWnd, L"请检查华为电脑管家和手写笔相关驱动是否正确安装！", L"出错啦！", MB_OK);
-            SendMessage(hWnd, WM_CLOSE, 0, 0);
-            return;
+            HRSRC hRes = FindResource(hInst, MAKEINTRESOURCE(IDR_DLL1), L"DLL");
+            DWORD dwSize = SizeofResource(hInst, hRes);
+            HGLOBAL hGlob = LoadResource(hInst, hRes);
+            void* pRes = LockResource(hGlob);
+            wchar_t szPath[MAX_PATH];
+            GetTempPath(MAX_PATH, szPath);
+            wcscat_s(szPath, L"PenService.dll");
+            HANDLE hFile = CreateFile(szPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+            DWORD dwWrite;
+            WriteFile(hFile, pRes, dwSize, &dwWrite, NULL);
+            CloseHandle(hFile);
+            FreeResource(hGlob);
+            hDll_PenService = LoadLibrary(szPath);
+
+            if (hDll_PenService == NULL)
+            {
+                SendMessage(hWnd, WM_CLOSE, 0, 0);
+                return;
+            }
 		}
     }
     CommandSendSetPenKeyFunc = (int2void)GetProcAddress(hDll_PenService, "CommandSendSetPenKeyFunc");
@@ -125,13 +141,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
     HWND handle = FindWindow(NULL, szTitle);
     if (handle != NULL)
     {
-        DialogBox(hInst, MAKEINTRESOURCE(IDD_OPENED), NULL, show_error);
+        DialogBox(hInstance, MAKEINTRESOURCE(IDD_OPENED), NULL, show_error);
         return 0;
     }
 	
     MyRegisterClass(hInstance);
 
-    if (!InitInstance (hInstance, nCmdShow)) return FALSE;
+    if (!InitInstance(hInstance, nCmdShow)) return FALSE;
 
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_MATEBOOKEPEN));
 	

@@ -106,5 +106,6 @@
   <ItemGroup>
     <None Include="README.md" />
     <None Include="packages.config" />
+    <None Include="PenService.dll" />
   </ItemGroup>
 </Project>

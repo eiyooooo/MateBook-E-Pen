@@ -32,6 +32,7 @@
 #define IDB_UNDO                        165
 #define IDB_WnE                         166
 #define IDR_MENU1                       167
+#define IDR_DLL1                        168
 #define IDC_S1                          1004
 #define IDC_S2                          1005
 #define IDC_S3                          1006
@@ -68,7 +69,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        168
+#define _APS_NEXT_RESOURCE_VALUE        169
 #define _APS_NEXT_COMMAND_VALUE         32786
 #define _APS_NEXT_CONTROL_VALUE         1023
 #define _APS_NEXT_SYMED_VALUE           111
