@@ -2,7 +2,7 @@
 #include "MateBook-E-Pen.h"
 
 #define version "2.1.1"
-#define dev_mode true
+#define dev_mode false
 
 /////////////////////////////////////////////
 /////////////////           /////////////////

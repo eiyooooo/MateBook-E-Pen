@@ -4,7 +4,7 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/eiyooooo/MateBook-E-Pen)
 ![GitHub all releases](https://img.shields.io/github/downloads/eiyooooo/MateBook-E-Pen/total)
 
-一个为解决MateBook E 2022搭配M-Pencil使用时，侧边双击功能太少而开发的一个程序
+一个为解决MateBook E 系列(E 2022/E Go/E 2023)搭配M-Pencil使用时，侧边双击功能太少而开发的一个程序
 
 
 ## 特性
@@ -31,6 +31,12 @@
 (即开即用)
 
 ## 更新历史
+
+#### v2.1.1
+
+1.优化 可在没安装电脑管家的情况下运行
+
+2.优化 捕获面板逻辑
 
 #### v2.1.0
 
