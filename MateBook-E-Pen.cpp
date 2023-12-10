@@ -248,7 +248,8 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND:
         if (HIWORD(wParam) == LBN_SELCHANGE)
         {
-            capturing_WnE = -5;
+            if (capturing_WnE == -4) capturing_WnE = -5;
+            else if (capturing_WnE == -6) capturing_WnE = -7;
             EnableWindow(GetDlgItem(hDlg, IDC_TEST), TRUE);
             break;
         }
@@ -267,6 +268,17 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
                 ShowWindow(GetDlgItem(hDlg, IDC_PEN), SW_SHOW);
                 ShowWindow(GetDlgItem(hDlg, IDC_ERASER), SW_SHOW);
                 capturing_WnE = 0;
+            }
+            if (capturing_WnE == -6 || capturing_WnE == -7)
+            {
+                ShowWindow(GetDlgItem(hDlg, IDC_LIST1), SW_HIDE);
+                ShowWindow(GetDlgItem(hDlg, IDC_S7), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_S8), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_S9), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_WINDOW), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_PEN), SW_SHOW);
+                ShowWindow(GetDlgItem(hDlg, IDC_ERASER), SW_SHOW);
+                capturing_WnE = -1;
             }
             EnableWindow(GetDlgItem(hDlg, IDC_SAVE), FALSE);
             EnableWindow(GetDlgItem(hDlg, IDC_START), FALSE);
@@ -293,8 +305,8 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         }
 		case IDC_TEST:
 		{
-            if (capturing_WnE == 4) capturing_WnE = 5;
-            else if (capturing_WnE == -5)
+            if (capturing_WnE == 4 || capturing_WnE == 6) capturing_WnE = 5;
+            else if (capturing_WnE == -5 || capturing_WnE == -7)
             {
                 int index = SendMessage(GetDlgItem(hDlg, IDC_LIST1), LB_GETCURSEL, 0, 0);
 				SendMessage(GetDlgItem(hDlg, IDC_LIST1), LB_DELETESTRING, index, 0);
@@ -309,11 +321,13 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
                     i++;
                 }
                 EnableWindow(GetDlgItem(hDlg, IDC_TEST), FALSE);
-                capturing_WnE = -4;
+                if (capturing_WnE == -5) capturing_WnE = -4;
+                else if (capturing_WnE == -7) capturing_WnE = -6;
             }
             else
             {
-                capturing_WnE = -4;
+                if (capturing_WnE == 0) capturing_WnE = -4;
+                if (capturing_WnE == -1) capturing_WnE = -6;
                 KillTimer(hDlg, 1);
                 KillTimer(hDlg, 2);
                 KillTimer(hDlg, 3);
@@ -330,6 +344,7 @@ INT_PTR CALLBACK popup(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 				ShowWindow(GetDlgItem(hDlg, IDC_WINDOW), SW_HIDE);
 				ShowWindow(GetDlgItem(hDlg, IDC_PEN), SW_HIDE);
 				ShowWindow(GetDlgItem(hDlg, IDC_ERASER), SW_HIDE);
+                SendMessage(GetDlgItem(hDlg, IDC_LIST1), LB_RESETCONTENT, 0, 0);
                 for (auto it = config_data["pen_and_eraser_save"].begin(); it != config_data["pen_and_eraser_save"].end(); it++)
                 {
                     string key = it.key();
@@ -1857,7 +1872,8 @@ void* capture_Element()
                     capturing_WnE = -1;
                     SetDlgItemText(hwnd_popup, IDC_S6, L"当前控件组合不支持，请重新捕获");
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
-                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), TRUE);
+                    SetDlgItemText(hwnd_popup, IDC_TEST, L"已捕获列表");
                     SetDlgItemText(hwnd_popup, IDC_WINDOW, L"未获取");
                     SetDlgItemText(hwnd_popup, IDC_PEN, L"未获取");
                     SetDlgItemText(hwnd_popup, IDC_ERASER, L"未获取");
@@ -1888,7 +1904,8 @@ void* capture_Element()
                     capturing_WnE = -1;
                     SetDlgItemText(hwnd_popup, IDC_S6, L"无法定位控件，请重新捕获");
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
-                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), TRUE);
+                    SetDlgItemText(hwnd_popup, IDC_TEST, L"已捕获列表");
                     SetDlgItemText(hwnd_popup, IDC_WINDOW, L"未获取");
                     SetDlgItemText(hwnd_popup, IDC_PEN, L"未获取");
                     SetDlgItemText(hwnd_popup, IDC_ERASER, L"未获取");
@@ -1927,7 +1944,8 @@ void* capture_Element()
                     capturing_WnE = -1;
                     SetDlgItemText(hwnd_popup, IDC_S6, L"当前控件组合不支持，请重新捕获");
                     EnableWindow(GetDlgItem(hwnd_popup, IDC_START), TRUE);
-                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), FALSE);
+                    EnableWindow(GetDlgItem(hwnd_popup, IDC_TEST), TRUE);
+                    SetDlgItemText(hwnd_popup, IDC_TEST, L"已捕获列表");
                     SetDlgItemText(hwnd_popup, IDC_WINDOW, L"未获取");
                     SetDlgItemText(hwnd_popup, IDC_PEN, L"未获取");
                     SetDlgItemText(hwnd_popup, IDC_ERASER, L"未获取");
