@@ -7,21 +7,22 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MateBook-E-Pen", "MateBook-
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM64EC = Debug|ARM64EC
 		Debug|x64 = Debug|x64
-		Debug|x86 = Debug|x86
+		Release|ARM64EC = Release|ARM64EC
 		Release|x64 = Release|x64
-		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Debug|ARM64EC.ActiveCfg = Debug|ARM64EC
+		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Debug|ARM64EC.Build.0 = Debug|ARM64EC
 		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Debug|x64.ActiveCfg = Debug|x64
 		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Debug|x64.Build.0 = Debug|x64
-		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Debug|x86.ActiveCfg = Debug|Win32
-		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Debug|x86.Build.0 = Debug|Win32
+		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Release|ARM64EC.ActiveCfg = Release|ARM64EC
+		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Release|ARM64EC.Build.0 = Release|ARM64EC
+		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Release|ARM64EC.Deploy.0 = Release|ARM64EC
 		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Release|x64.ActiveCfg = Release|x64
 		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Release|x64.Build.0 = Release|x64
 		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Release|x64.Deploy.0 = Release|x64
-		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Release|x86.ActiveCfg = Release|Win32
-		{5B69CAE3-D8BA-4F24-9E22-004D13330C27}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
